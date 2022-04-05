@@ -1,0 +1,105 @@
+(*
+<partition> is a list of <partition item> or nil
+{PartitionToTimedList <partition>} = <flat partition>
+*)
+<partition> ::= 
+	nil
+	| <partition item> '|' <partition>
+;
+
+(*
+WARNING:
+	each element of the <partition> can be one of the
+	following types
+	The program should be able to handle a mixed up list
+*)
+<partition item> ::=
+	<note>
+	| <chord>
+	| <extended note>
+	| <extended chord>
+	| <transformation>
+;
+
+(*
+<note> is represented by the spn (scientific pitch notation)
+examples:
+C C# D D# E F F# G G# A A# B
+with the <octave> number following if needed
+the duration of the note is 1 second
+*)
+<note> ::=
+	silence
+	| <name>
+	| <name><octave>
+	| <name>#<octave>
+;
+
+<name> ::= a | b | c | d | e | f | g;
+<octave> ::= <natural>;
+
+(*
+<extended note> can be generated from <note> using the supplied
+function NoteToExtended
+if extracted by the function:
+	instrument =  none,
+	duration = 1
+*)
+<extended note> ::=
+	silence(duration:<duration>)
+	| note(
+		name:<name>
+		octave:<octave>
+		sharp:<boolean>
+		duration:<duration>
+		instrument:<atom>
+	)
+;
+
+(*
+List of <notes> played at the same time
+
+They all should have the same duration
+empty <chord> is permitted but has no duration
+*)
+<chord> ::= 
+	nil
+	| <note> '|' <chord>
+;
+
+<extended chord> ::=
+	nil
+	| <extended note> '|' <extended chord>
+;
+
+(*
+This is the type that should be returned by
+{PartitionToTimedList <partition>} = <flat partition>
+*)
+<flat partition> ::=
+	nil
+	| <extended sound> '|' <flat partition>
+;
+
+<extended sound> ::= <extended note> | <extended chord>;
+
+(*
+Modifying the duration of a <partition> means every
+item in that partition should be modifyied accordingly
+duration() : 
+	sets the new duration of partition
+stretch() :
+	stretched the duration of partition
+drone() :
+	repeates the given note|chord the given amount of time
+transpose() :
+	transposes the partition by a certain amount of semitones upwards
+*)
+<transformation> ::=
+	duration(seconds:<duration> <partition>)
+	| stretch(factor:<factor> <partition>)
+	| drone(note:<note or chord> amount:<natural>)
+	| transpose(semitones:<integer> <partition>)
+;
+
+<note or chord> ::= <note> | <chord> | <extended note> | <extended chord> ;
