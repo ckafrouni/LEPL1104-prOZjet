@@ -3,6 +3,10 @@
 {PartitionToTimedList <partition>} = <flat partition>
 *)
 <partition> ::= 
+
+
+
+
 	nil
 	| <partition item> '|' <partition>
 ;
