@@ -1,21 +1,4 @@
 local
-	fun {PartitionToTimedList Partition}
-		case Partition
-		of nil then nil
-		[] H|T then
-			local Item ExtSound in
-				Item = {New PtItem init(H)}
-				if {Item is_extended_sound($)} then
-					ExtSound = {Item get($)}
-				else
-					{Item extend}
-					ExtSound = {Item get($)}
-				end
-				ExtSound|{PartitionToTimedList T}
-			end
-		end
-	end
-
 	fun {NoteToExtended Note}
       case Note
       of Name#Octave then
@@ -30,17 +13,27 @@ local
       end
    end
 
-	fun {DroneNote Note N}
-		case Note 
-		of note(name:_ octave:_ sharp:_ duration:_ instrument:_) then skip
-		[] H|T then skip
-	end
-
-	fun {ChordToExtended Chord}
+   fun {ChordToExtended Chord}
 		case Chord of nil then nil
-		[] H|T then {NoteToExtended H}|{ChordToExtended T}
+		[] H|T then 
+			case H of note(name:_ octave:_ sharp:_ duration:_ instrument:_) then H|{ChordToExtended T}
+			else {NoteToExtended H}|{ChordToExtended T}
+			end
 		end
 	end
+
+   fun {DroneNote Note N}
+		if N==0 then nil
+		else 
+			case Note 
+			of note(name:_ octave:_ sharp:_ duration:_ instrument:_) then Note|{DroneNote Note N-1}
+			else 
+				{DroneNote {NoteToExtended Note} N}
+			end
+		end
+	end
+
+   /***************************************************************************/
 
 	class PtItem
 		attr value
@@ -60,10 +53,6 @@ local
 			case @value
 			of silence(duration:_ ) then S = true
 			[] note(name:_ octave:_ sharp:_ duration:_ instrument:_ ) then S = true
-			[] H|_ then {{New PtItem init(H)} is_extended_sound(S)}
-				/* On vérifie uniquement un élément de l'accord:
-				 * dans la spec, <extended chord> est une liste d'<extended note> uniquement 
-				 */
 			else S = false
 			end
 		end
@@ -73,20 +62,43 @@ local
 		 */
 		meth extend
 			case @value
-			of _|_ then value := {ChordToExtended @value}
+			of _|_ then value := [{ChordToExtended @value}]
 			[] drone(note:N Amount) then 
 				case N of Note then value := {DroneNote Note Amount} end
-			[] stretch() then value := {Stretch Partition Factor}
 			else value := {NoteToExtended @value}
 			end
 		end
 	end
 
-in
-	local 
-		Res1={PartitionToTimedList [a [b b] note(name:e octave:5 sharp: true duration:1 instrument:none) silence(duration:1) [f g] a]}
-		Res2={PartitionToTimedList [drone(note:a 2) b]}
+   fun {PartitionToTimedList Partition}
+		fun {Go Partition Acc}
+			case Partition
+			of nil then Acc
+			[] H|T then
+				local Item ExtSound in
+					Item = {New PtItem init(H)}
+					if {Item is_extended_sound($)} then
+						ExtSound = {Item get($)}
+					else
+						{Item extend}
+						ExtSound = {Item get($)}
+					end
+					case ExtSound 
+					of _|_ then {Go T {Append Acc ExtSound}}
+					else {Go T {Append Acc [ExtSound]}}
+					end
+				end
+			end
+		end
 	in
-		{Browse Res2}
+		{Go Partition nil}
 	end
+
+	%%%%%%%%%%%
+	%Res1={PartitionToTimedList [a [b b] note(name:e octave:5 sharp: true duration:1 instrument:none) silence(duration:1) [f g] a]}
+	Res2={PartitionToTimedList [b drone(note:a 2) [a b]]} %[[a a] b]
+	%Res2={PartitionToTimedList [a duration(seconds:5 [b c d])]}
+
+in
+	{Browse Res2}
 end
