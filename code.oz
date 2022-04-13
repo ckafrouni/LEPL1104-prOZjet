@@ -40,6 +40,44 @@ local
 		end
 	end
 
+	fun {StretchExtend Facteur ExtPartition}
+		% loop sur Extpartition et multiplier temps par facteur
+		case ExtPartition
+		of nil then nil
+		[] H|T then
+			case H
+			of _|_ then {StretchExtend Facteur H}|{StretchExtend Facteur T}
+			[] note(name:N octave:O sharp:S duration:D instrument:I) then
+				local Res in
+					Res = Facteur * {StringToFloat D}
+					note(name:N octave:O sharp:S duration:Res instrument:I)|{StretchExtend Facteur T}
+				end
+			end
+		end
+	end
+
+	fun {GetTotalTime ExtPartition}
+		fun {Go ExtPartition Acc}
+			case ExtPartition
+			of nil then Acc
+			[] H|T then
+				case H
+				of H1|_ then {Go T Acc+{StringToFloat H1.duration}}
+				else {Go T Acc+{StringToFloat H.duration}}
+				end
+			end
+		end
+	in
+		{Go ExtPartition 0.0}
+	end
+
+	fun {DurationExtend NewLength ExtPartition}
+		CurrentLength = {GetTotalTime ExtPartition}
+		Facteur = NewLength/CurrentLength
+	in
+		{StretchExtend Facteur ExtPartition}
+	end
+
    /***************************************************************************/
 
 	class PtItem
@@ -72,6 +110,10 @@ local
 			of _|_ then value := [{ChordToExtended @value}]
 			[] drone(note:N Amount) then 
 				case N of Note then value := {DroneNote Note Amount} end
+			[] duration(seconds:S Partition) then 
+				value := {DurationExtend {StringToFloat S} {PartitionToTimedList Partition}}
+			[] stretch(factor:F Partition) then
+				value := {StretchExtend {StringToFloat F} {PartitionToTimedList Partition}}
 			else value := {NoteToExtended @value}
 			end
 		end
@@ -117,13 +159,13 @@ local
    Start
 
    % Uncomment next line to insert your tests.
-   \insert 'tests.oz'
+   % \insert 'tests.oz'
    % !!! Remove this before submitting.
 in
    Start = {Time}
 
    % Uncomment next line to run your tests.
-   {Test Mix PartitionToTimedList}
+   % {Test Mix PartitionToTimedList}
 
    % Add variables to this list to avoid "local variable used only once"
    % warnings.
@@ -131,7 +173,7 @@ in
    
    % Calls your code, prints the result and outputs the result to `out.wav`.
    % You don't need to modify this.
-   % {Browse {Project.run Mix PartitionToTimedList Music 'out.wav'}}
+   {Browse {Project.run Mix PartitionToTimedList Music 'out.wav'}}
    
    % Shows the total time to run your code.
    {Browse {IntToFloat {Time}-Start} / 1000.0}
