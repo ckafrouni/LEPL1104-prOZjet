@@ -30,6 +30,12 @@ local
       end
    end
 
+	fun {DroneNote Note N}
+		case Note 
+		of note(name:_ octave:_ sharp:_ duration:_ instrument:_) then skip
+		[] H|T then skip
+	end
+
 	fun {ChordToExtended Chord}
 		case Chord of nil then nil
 		[] H|T then {NoteToExtended H}|{ChordToExtended T}
@@ -54,7 +60,7 @@ local
 			case @value
 			of silence(duration:_ ) then S = true
 			[] note(name:_ octave:_ sharp:_ duration:_ instrument:_ ) then S = true
-			[] H|_ then {{New PtItem init(H)} is_extended_sound(S)} 
+			[] H|_ then {{New PtItem init(H)} is_extended_sound(S)}
 				/* On vérifie uniquement un élément de l'accord:
 				 * dans la spec, <extended chord> est une liste d'<extended note> uniquement 
 				 */
@@ -68,14 +74,19 @@ local
 		meth extend
 			case @value
 			of _|_ then value := {ChordToExtended @value}
+			[] drone(note:N Amount) then 
+				case N of Note then value := {DroneNote Note Amount} end
+			[] stretch() then value := {Stretch Partition Factor}
 			else value := {NoteToExtended @value}
 			end
 		end
 	end
 
 in
-	local Res={PartitionToTimedList [a b [c d] note(name:e octave:5 sharp: true duration:1 instrument:none) silence(duration:1) [f g] a]}
+	local 
+		Res1={PartitionToTimedList [a [b b] note(name:e octave:5 sharp: true duration:1 instrument:none) silence(duration:1) [f g] a]}
+		Res2={PartitionToTimedList [drone(note:a 2) b]}
 	in
-		{Browse Res}
+		{Browse Res2}
 	end
 end
