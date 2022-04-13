@@ -71,6 +71,56 @@ local
 		{StretchExtend Facteur ExtPartition}
 	end
 
+	% fun {TransposeExtend N ExtPartition}
+	% 	TABLE = semitones(
+	% 			'c':'c#'
+	% 			'c#':'d'
+	% 			'd''d#'
+	% 			'd#':'e'
+	% 			'e':'f'
+	% 			'f':'f#'
+	% 			'f#':'g'
+	% 			'g':'g#'
+	% 			'g#':'a'
+	% 			'a''a#'
+	% 			'a#':'b'
+	% 			'b':'c'
+	% 	)
+
+	% 	TABLE = semitones(
+	% 		n(name:c sharp:true)
+	% 		n(name:d sharp:false)
+	% 		n(name:d sharp:true)
+	% 		n(name:e sharp:false)
+	% 		n(name:f sharp:false)
+	% 		n(name:f sharp:true)
+	% 		n(name:g sharp:false)
+	% 		n(name:g sharp:true)
+	% 		n(name:a sharp:false)
+	% 		n(name:a sharp:true)
+	% 		n(name:b sharp:false)
+	% 		n(name:c sharp:false)
+	% 		)
+
+	% 	fun {TransposeNote N Note}
+	% 		% note(name:d sharp:true octave:5 duration:2 ..)
+	% 		% OldNote = Note
+	% 		if N /= 0 then
+	% 			NewNote = note(name:TABLE.(Note.name) sharp:false octave:Note.octave )
+	% 			{TransposeNote N TABLE.Note.name} 
+	% 	end
+
+	% in
+	% 	case ExtPartition
+	% 	of nil then nil
+	% 	[] H|T then
+	% 		case H
+	% 		of H|T then
+	% 		else {TransposeNote N H}
+	% 	end
+	% end
+
+
    /***************************************************************************/
 
 	class PtItem
@@ -107,8 +157,8 @@ local
 				value := {DurationExtend {StringToFloat S} {PartitionToTimedList Partition}}
 			[] stretch(factor:F Partition) then
 				value := {StretchExtend {StringToFloat F} {PartitionToTimedList Partition}}
-			[] transpose(semitones:N Partition) then
-				value := {SemitonesExtend}
+			% [] transpose(semitones:N Partition) then
+			% 	value := {TransposeExtend {StringToFloat N} {PartitionToTimedList Partition}}
 			else value := {NoteToExtended @value}
 			end
 		end
