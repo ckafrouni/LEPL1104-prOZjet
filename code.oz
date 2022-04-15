@@ -312,13 +312,22 @@ local
 		{SumMs Final {MakeZeros Max}}
 	end
 
+	fun {Repeat N Music}
+		if N==0 then nil
+		else {Flatten Music|{Repeat N-1 Music}} % {Flatten Music|Music|nil}
+		end
+	end
+
+
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
 			of partition(P) then {SamplePartition {P2T P}}
 			[] sample(S) then S
 			[] wave(Filename) then {Project.readFile Filename}
-			[] merge(Musics) then {MergeMusics Musics}
+			[] merge(Ms) then {MergeMusics Ms}
+			[] reverse(Ms) then {List.reverse {Mix P2T Ms}}
+			[] repeat(amount:N Ms) then {Repeat N {Mix P2T Ms}}
 			[] _ then nil
 			end
 		end
@@ -330,14 +339,15 @@ local
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
    %Music = {Project.load 'joy.dj.oz'}
-	Music1 = [partition([a b]) partition([c d])]
+	%Music1 = [partition([a b]) partition([c d])]
 	% Music=[partition([
 	% 	stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
 	% ])]
-	Music2 = [wave('wave/animals/cat.wav')]
+	%Music2 = [wave('wave/animals/cat.wav')]
 
 	%Music = [merge([0.5#[sample([0.2 0.2 0.2])] 0.5#[sample([0.6 0.6 ])]])]
-	Music = [merge([0.5#Music1 0.5#Music2])]
+	%Music = [merge([0.5#Music1 0.5#Music2])]
+	Music = [repeat(amount:3 [partition([c d e f])])]
 
 
    Start
