@@ -318,6 +318,16 @@ local
 		end
 	end
 
+	fun {Loop S Music}
+		% SPEC: S est un float
+		TotalLen = {FloatToInt S * 44100.0}
+		Len = {Length Music}
+		NRepeat = TotalLen div Len
+		NTake = TotalLen mod Len
+	in
+		{Append {Repeat NRepeat Music} {List.take Music NTake}}
+	end
+
 
    fun {Mix P2T Music}
 		fun {Go Part}
@@ -328,6 +338,7 @@ local
 			[] merge(Ms) then {MergeMusics Ms}
 			[] reverse(Ms) then {List.reverse {Mix P2T Ms}}
 			[] repeat(amount:N Ms) then {Repeat N {Mix P2T Ms}}
+			[] loop(seconds:S Ms) then {Loop S {Mix P2T Ms}}
 			[] _ then nil
 			end
 		end
@@ -347,7 +358,9 @@ local
 
 	%Music = [merge([0.5#[sample([0.2 0.2 0.2])] 0.5#[sample([0.6 0.6 ])]])]
 	%Music = [merge([0.5#Music1 0.5#Music2])]
-	Music = [repeat(amount:3 [partition([c d e f])])]
+	%Music = [repeat(amount:3 [partition([c d e f])])]
+
+	Music = [loop(seconds:3.5 [partition([c g])])]
 
 
    Start
