@@ -36,22 +36,24 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % TEST PartitionToTimedNotes
+NoteList = [a b c]
+ExtNoteList = [note(name:a octave:4 sharp:false duration:1.0 instrument:none) note(name:b octave:4 sharp:false duration:1.0 instrument:none) note(name:c octave:4 sharp:false duration:1.0 instrument:none)]
+NoteAndExtNote = [a note(name:b octave:4 sharp:false duration:1.0 instrument:none) c]
 
 proc {TestNotes P2T}
-   skip
+   {AssertEquals {P2T NoteList} ExtNoteList 'note partition'}
+   {AssertEquals {P2T ExtNoteList} ExtNoteList 'extnote partition'}
+   {AssertEquals {P2T NoteAndExtNote} ExtNoteList 'mix note and extnote partition'}
 end
 
 proc {TestChords P2T}
-   skip
+   {AssertEquals {P2T [NoteList]} [ExtNoteList] 'single chord partition'}
+   {AssertEquals {P2T [ExtNoteList]} [ExtNoteList] 'single ext_chord partition'}
 end
 
-proc {TestIdentity P2T}
-   % test that extended notes and chord go from input to output unchanged
-   skip
-end
-
+D = [duration(seconds:4 [a b])]
 proc {TestDuration P2T}
-   skip
+   {AssertEquals {P2T D}.1 note(name:a octave:4 sharp:false duration:2.0 instrument:none) 'duration two notes'}
 end
 
 proc {TestStretch P2T}
@@ -62,8 +64,10 @@ proc {TestDrone P2T}
    skip
 end
 
+P = [transpose(semitones:3 [c#4 d])]
+R = [note(name:e octave:4 sharp:false duration:1.0 instrument:none) note(name:f octave:4 sharp:false duration:1.0 instrument:none)]
 proc {TestTranspose P2T}
-   skip
+   {AssertEquals {P2T P} R 'Transpose'}
 end
 
 proc {TestP2TChaining P2T}
@@ -78,7 +82,6 @@ end
 proc {TestP2T P2T}
    {TestNotes P2T}
    {TestChords P2T}
-   {TestIdentity P2T}
    {TestDuration P2T}
    {TestStretch P2T}
    {TestDrone P2T}

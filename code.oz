@@ -78,6 +78,16 @@ local
 		{StretchExtend Facteur ExtPartition}
 	end
 
+
+	fun {TransposeExtend N Partition}
+		if N > 0 then
+			{TransposeExtend N-1 {Map Partition AddSemi}}
+		elseif N < 0 then
+			{TransposeExtend N+1 {Map Partition RemoveSemi}}
+		else Partition
+		end
+	end
+
    /***************************************************************************/
 
 	class PtItem
@@ -114,6 +124,8 @@ local
 				value := {DurationExtend {StringToFloat S} {PartitionToTimedList Partition}}
 			[] stretch(factor:F Partition) then
 				value := {StretchExtend {StringToFloat F} {PartitionToTimedList Partition}}
+			[] transpose(semitones:N Partition) then
+				value := {TransposeExtend {StringToInt N} {PartitionToTimedList Partition}}
 			else value := {NoteToExtended @value}
 			end
 		end
@@ -134,7 +146,7 @@ local
 					end
 					case ExtSound 
 					of _|_ then {Go T {Append Acc ExtSound}}
-					else {Go T {Append Acc [ExtSound]}}
+					[] _ then {Go T {Append Acc [ExtSound]}}
 					end
 				end
 			end
@@ -143,29 +155,201 @@ local
 		{Go Partition nil}
 	end
 
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%-------- A RETRAVAILLER 
+
+	   % @ pre Note est un element de type <extendedNote>
+   % @ post retourne un element de type <extendedNote> décalé d'un demi-ton vers le haut
+   %          imprime non-existante si on essaye de transposer b14
+   fun{AddSemi Note}
+      if Note.sharp == false then
+	 		if {Not (Note.name==e orelse Note.name==b)} then
+	    		note(name:Note.name octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
+	 		elseif Note.name==e then
+	       	note(name:f octave:Note.octave sharp:Note.sharp duration:Note.duration instrument:Note.instrument)
+	    	elseif Note.octave>=14 then 'non-existante'
+	      else note(name:c octave:(Note.octave+1) sharp:Note.sharp duration:Note.duration instrument:Note.instrument)
+	 		end
+      else
+			case Note.name
+			of c then note(name:d octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
+			[] d then note(name:e octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
+			[] f then note(name:g octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
+			[] g then note(name:a octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
+			[] a then note(name:b octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
+			end
+      end
+   end
+
+	   % @pre Note est un élément de type <extended note>
+   % @post retourne une <extended note> transposee d'un demi-ton vers le bas
+   %       imprime non-existante si on essaye de transposer c-1
+   fun{RemoveSemi Note}
+      if Note.sharp==true then
+	 		note(name:Note.name octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
+      else case Note.name 
+			of c then
+	      	local X=Note.octave-1 in
+					if X<~1 then 'non-existante'
+					else note(name:b octave:X sharp:Note.sharp duration:Note.duration instrument:Note.instrument)
+					end
+				end
+			[]f then note(name:e octave:Note.octave sharp:Note.sharp duration:Note.duration instrument:Note.instrument)
+			[]a then note(name:g octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
+			[]b then note(name:a octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
+			[]d then note(name:c octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
+			[]e then note(name:d octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
+			[]g then note(name:f octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
+			end
+      end
+   end
+
+	   %@pre prend une <extended note> en argument
+   %@post renvoie le nombre de demi-ton qui separe cette note et la note "c" de la meme octave que la note en argument
+   fun{CountSemiFromC Note}
+      local fun{CountAcc Note Ref Acc}
+	       if Ref.name==Note.name andthen Ref.octave==Note.octave andthen Ref.sharp==Note.sharp then Acc
+	       else
+		  {CountAcc Note {AddSemi Ref} Acc+1}
+	       end
+	    end
+      in
+	 {CountAcc Note note(name:c octave:Note.octave sharp:false duration:1.0 instrument:none) 0}
+      end
+   end
+
+	fun{GetHeight Note}
+		case Note of silence(duration:_) then 0
+			else if Note.octave =<4 then 12*(Note.octave-4)+{CountSemiFromC Note}-9
+			elseif Note.octave >4 then 3+12*(Note.octave-4-1)+{CountSemiFromC Note}
+			end
+		end
+	end
+
+%-------- A RETRAVAILLER 
+
+	fun {SampleFromNote Note}
+		Height = {IntToFloat {GetHeight Note}} % float
+		Freq = {Pow 2.0 (Height/12.0)} * 440.0
+		SampleSize = {StringToFloat Note.duration} * 44100.0
+		Is = {List.number 1 {FloatToInt SampleSize} 1}
+		fun {CalcAi I} X in 
+			X = 2.0 * 3.14 * Freq * {IntToFloat I}
+			0.5 * {Sin X/SampleSize $} 
+		end
+	in
+		{Map Is CalcAi}
+	end
+
+	fun {SampleFromChord Chord}
+		SampleSize = {StringToFloat (Chord.1).duration} * 44100.0
+		fun {Sum X Y} X+Y end
+		fun {Go Chord Acc}
+			case Chord
+			of nil then Acc
+			[] Note|T then 
+				{Go T
+					{List.zip Acc {SampleFromNote Note} Sum $}}
+			end
+		end
+		Start = {Map {List.make {FloatToInt SampleSize} $} fun {$ X} 0.0 end}
+	in
+		{Map {Go Chord Start} fun {$ X} X/{IntToFloat {Length Chord}} end}
+	end
+
+	fun {SamplePartition ExtPart}
+		case ExtPart
+		of nil then nil
+		[] H|T then
+			case H
+			of _|_ then {Append {SampleFromChord H} {SamplePartition T}}
+			else {Append {SampleFromNote H} {SamplePartition T}}
+			end
+		end
+	end
+
+	fun {MergeMusics MusicsWithInts}
+		% [0.1#Mu1 0.4#Mu2 0.5#Mu3]
+		fun {Scale Mus}
+			case Mus
+			of F#M then {Map {Mix PartitionToTimedList M} fun {$ X} F*X end}
+			else nil
+			end
+		end
+		fun {GetMaxLength Xs Cur}
+			case Xs
+			of H|T then
+				if {Length H} > Cur then {GetMaxLength T {Length H}}
+				else {GetMaxLength T Cur} end
+			[] nil then Cur
+			end
+		end
+		fun {MakeZeros Len}
+			{Map {List.make Len $} fun {$ X} 0.0 end}
+		end
+		fun {MakeDiffs Ms Max}
+			{Map Ms fun {$ M} Max-{Length M} end}
+		end
+		fun {CompleteWith0 M Diff}
+			{Append M {MakeZeros Diff}}
+		end
+		fun {SumMs Ms Acc}
+			case Ms
+			of nil then Acc
+			[] H|T then 
+				{SumMs T
+					{List.zip Acc H fun {$ X Y} X+Y end $}}
+			end
+		end
+		Ms Max Diffs Final
+	in
+		Ms = {Map MusicsWithInts Scale}
+		Max = {GetMaxLength Ms 0}
+		Diffs = {MakeDiffs Ms Max}
+		Final = {List.zip Ms Diffs CompleteWith0 $}
+		{SumMs Final {MakeZeros Max}}
+	end
 
    fun {Mix P2T Music}
-      % TODO
-      {Project.readFile 'wave/animals/cow.wav'}
+		fun {Go Part}
+			case Part
+			of partition(P) then {SamplePartition {P2T P}}
+			[] sample(S) then S
+			[] wave(Filename) then {Project.readFile Filename}
+			[] merge(Musics) then {MergeMusics Musics}
+			[] _ then nil
+			end
+		end
+	in
+		{Flatten {Map Music Go}}
    end
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-   Music = {Project.load 'joy.dj.oz'}
+   %Music = {Project.load 'joy.dj.oz'}
+	Music1 = [partition([a b]) partition([c d])]
+	% Music=[partition([
+	% 	stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
+	% ])]
+	Music2 = [wave('wave/animals/cat.wav')]
+
+	%Music = [merge([0.5#[sample([0.2 0.2 0.2])] 0.5#[sample([0.6 0.6 ])]])]
+	Music = [merge([0.5#Music1 0.5#Music2])]
+
+
    Start
 
    % Uncomment next line to insert your tests.
-   % \insert 'tests.oz'
+   %\insert 'tests.oz'
    % !!! Remove this before submitting.
 in
    Start = {Time}
 
    % Uncomment next line to run your tests.
-   % {Test Mix PartitionToTimedList}
+   %{Test Mix PartitionToTimedList}
 
    % Add variables to this list to avoid "local variable used only once"
    % warnings.
