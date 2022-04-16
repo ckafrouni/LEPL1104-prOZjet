@@ -337,9 +337,6 @@ local
 		LenMusic = {Length Music}
 		NewLowS NewHighS TmpMusic
 	in
-		% {Browse LowS}
-		% {Browse Music}
-		% {Browse HighS}
 		if LenLowS > LenMusic then NewLowS = {List.take LowS LenMusic}
 		elseif LenLowS < LenMusic then NewLowS = {Append LowS {MakeList (LenMusic-LenLowS) ~1.0}}
 		else NewLowS = LowS end
@@ -348,8 +345,8 @@ local
 		elseif LenHighS < LenMusic then NewHighS = {Append HighS {MakeList (LenMusic-LenHighS) 1.0}}
 		else NewHighS = HighS end
 
-		TmpMusic = {List.zip HighS Music fun {$ X Y} {Min X Y} end $}
-		{List.zip LowS TmpMusic fun {$ X Y} {Max X Y} end $}
+		TmpMusic = {List.zip NewHighS Music fun {$ X Y} {Min X Y} end $}
+		{List.zip NewLowS TmpMusic fun {$ X Y} {Max X Y} end $}
 	end
 
 
@@ -368,11 +365,7 @@ local
 			end
 		end
 	in
-		local Res in
-		Res = {Flatten {Map Music Go}}
-		{Browse Res}
-		Res
-		end
+		{Flatten {Map Music Go}}
    end
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -391,9 +384,9 @@ local
 
 	% Music = [loop(seconds:3.5 [partition([c g])])]
 
-	LoS = [~0.5 ~0.5 ~0.5 ~0.5 ~0.5 ~0.5]
+	LoS = [~0.5 ~0.5 ~0.5 ~0.5 ~0.5]
 	HiS = [0.5 0.5 0.5 0.5 0.5 0.5]
-	Ms = [0.1 0.6 ~0.6 ~0.1]
+	Ms = [0.1 0.6 ~0.6 ~0.1 0.0 0.0]
 	Music = [clip(low:LoS high:HiS [sample(Ms)])]
 
 
