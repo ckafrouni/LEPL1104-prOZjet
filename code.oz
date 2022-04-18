@@ -6,155 +6,67 @@ local
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-	fun {NoteToExtended Note}
+   % Translate a note to the extended notation.
+   fun {ExtendNoteOrSilence Note}
       case Note
-      of Name#Octave then
-         note(name:Name octave:Octave sharp:true duration:1.0 instrument:none)
+      of note(duration:_ instrument:_ name:_ octave:_ sharp:_) then Note
+      [] silence(duration:_) then Note
+      [] silence then silence(duration:1.0)
+      [] Name#Octave then note(name:Name octave:Octave sharp:true duration:1.0 instrument:none)
       [] Atom then
          case {AtomToString Atom}
-         of [_] then
-            note(name:Atom octave:4 sharp:false duration:1.0 instrument:none)
-         [] [N O] then
-            note(name:{StringToAtom [N]}  octave:{StringToInt [O]} sharp:false duration:1.0 instrument: none)
+         of [_] then note(name:Atom octave:4 sharp:false duration:1.0 instrument:none)
+         [] [N O] then note(name:{StringToAtom [N]} octave:{StringToInt [O]} sharp:false duration:1.0 instrument: none)
          end
       end
    end
 
-   fun {ChordToExtended Chord}
-		case Chord of nil then nil
-		[] H|T then 
-			case H of note(name:_ octave:_ sharp:_ duration:_ instrument:_) then H|{ChordToExtended T}
-			else {NoteToExtended H}|{ChordToExtended T}
-			end
-		end
-	end
+   fun {DroneTransform NoteOrChord Amount}
+		{List.foldR 
+			{List.map {List.make Amount} fun {$ _} NoteOrChord end}
+			List.append nil}
+   end
 
-   fun {DroneNote Note N}
-		if N==0 then nil
-		else 
-			case Note 
-			of note(name:_ octave:_ sharp:_ duration:_ instrument:_) then Note|{DroneNote Note N-1}
-			else 
-				{DroneNote {NoteToExtended Note} N}
-			end
-		end
-	end
+   fun {StretchTransform Partition Factor}
+      fun {Mapper I} 
+         case I of _|_ then {List.map I Mapper}
+         [] silence(duration:X) then silence(duration:X*Factor)
+         [] note(duration:D instrument:I name:N octave:O sharp:S) then
+            note(duration:D*Factor instrument:I name:N octave:O sharp:S)
+         end
+      end 
+   in {List.map Partition Mapper} end
 
-	fun {StretchExtend Facteur ExtPartition}
-		% loop sur Extpartition et multiplier temps par facteur
-		case ExtPartition
-		of nil then nil
-		[] H|T then
-			case H
-			of _|_ then {StretchExtend Facteur H}|{StretchExtend Facteur T}
-			[] note(name:N octave:O sharp:S duration:D instrument:I) then
-				local Res in
-					Res = Facteur * {StringToFloat D}
-					note(name:N octave:O sharp:S duration:Res instrument:I)|{StretchExtend Facteur T}
-				end
-			end
-		end
-	end
+   fun {DurationTransform Partition Duration}
+      fun {AccTime X Acc}
+         case X of Note|_ then Note.duration + Acc
+         [] _ then X.duration + Acc end
+      end
+      CurrentLength = {List.foldR Partition AccTime 0.0}
+      Factor = Duration/CurrentLength   
+   in {StretchTransform Partition Factor} end
 
-	fun {GetTotalTime ExtPartition}
-		fun {Go ExtPartition Acc}
-			case ExtPartition
-			of nil then Acc
-			[] H|T then
-				case H
-				of H1|_ then {Go T Acc+{StringToFloat H1.duration}}
-				else {Go T Acc+{StringToFloat H.duration}}
-				end
-			end
-		end
-	in
-		{Go ExtPartition 0.0}
-	end
-
-	fun {DurationExtend NewLength ExtPartition}
-		CurrentLength = {GetTotalTime ExtPartition}
-		Facteur = NewLength/CurrentLength
-	in
-		{StretchExtend Facteur ExtPartition}
-	end
-
-
-	fun {TransposeExtend N Partition}
-		if N > 0 then
-			{TransposeExtend N-1 {Map Partition AddSemi}}
-		elseif N < 0 then
-			{TransposeExtend N+1 {Map Partition RemoveSemi}}
-		else Partition
-		end
-	end
-
-   /***************************************************************************/
-
-	class PtItem
-		attr value
-
-		meth init(S)
-			value := S
-		end
-
-		meth get(R)
-			R = @value
-		end
-
-		/**
-		 * <extended sound> ::= <extended note>|<extended chord>
-		 */
-		meth is_extended_sound(S)
-			case @value
-			of silence(duration:_ ) then S = true
-			[] note(name:_ octave:_ sharp:_ duration:_ instrument:_ ) then S = true
-			else S = false
-			end
-		end
-
-		/**
-		 * Etends la valeur en attribue
-		 */
-		meth extend
-			case @value
-			of _|_ then value := [{ChordToExtended @value}]
-			[] drone(note:N Amount) then 
-				case N of Note then value := {DroneNote Note Amount} end
-			[] duration(seconds:S Partition) then 
-				value := {DurationExtend {StringToFloat S} {PartitionToTimedList Partition}}
-			[] stretch(factor:F Partition) then
-				value := {StretchExtend {StringToFloat F} {PartitionToTimedList Partition}}
-			[] transpose(semitones:N Partition) then
-				value := {TransposeExtend {StringToInt N} {PartitionToTimedList Partition}}
-			else value := {NoteToExtended @value}
-			end
-		end
-	end
-
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   % TODO:
+   % <transformation> ::=
+   %    | transpose(semitones:<integer> <partition>)
+   %    ;
    fun {PartitionToTimedList Partition}
-		fun {Go Partition Acc}
-			case Partition
-			of nil then Acc
-			[] H|T then
-				local Item ExtSound in
-					Item = {New PtItem init(H)}
-					if {Item is_extended_sound($)} then
-						ExtSound = {Item get($)}
-					else
-						{Item extend}
-						ExtSound = {Item get($)}
-					end
-					case ExtSound 
-					of _|_ then {Go T {Append Acc ExtSound}}
-					[] _ then {Go T {Append Acc [ExtSound]}}
-					end
-				end
+		% Return: <extended sound> wrapped in brackets
+		fun {ExtendItem I}
+			case I of nil then nil
+			[] _|_ then [{List.map I ExtendNoteOrSilence}] % Item is a chord
+			[] drone(note:X amount:N) then {DroneTransform {ExtendItem X} N}
+			[] stretch(factor:F Is) then {StretchTransform {PartitionToTimedList Is} F}
+			[] duration(seconds:D Is) then {DurationTransform {PartitionToTimedList Is} D}
+			% [] transpose(semitones:N Is) then {TransposeTransform {PartitionToTimedList Is} N}
+			else [{ExtendNoteOrSilence I}] % Item is a note/silence
 			end
 		end
-	in
-		{Go Partition nil}
-	end
-
+      Result in
+      {List.map Partition ExtendItem Result}
+      {List.foldR Result List.append nil}
+   end
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -376,7 +288,7 @@ local
 		fun {Go Part}
 			case Part
 			of partition(P) 			then {SamplePartition {P2T P}}
-			[] sample(S) 				then S
+			[] samples(S) 				then S
 			[] wave(Filename) 			then {Project.readFile Filename}
 			[] merge(Ms) 				then {MergeMusics Ms}
 			[] reverse(Ms) 				then {List.reverse {Mix P2T Ms}}
@@ -400,9 +312,9 @@ local
 
    %Music = {Project.load 'joy.dj.oz'}
 	%Music1 = [partition([a b]) partition([c d])]
-	% Music=[partition([
-	% 	stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
-	% ])]
+	Music=[partition([
+		stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
+	])]
 	%Music2 = [wave('wave/animals/cat.wav')]
 
 	%Music = [merge([0.5#[sample([0.2 0.2 0.2])] 0.5#[sample([0.6 0.6 ])]])]
@@ -418,8 +330,8 @@ local
 	% Music = [clip(low:LoS high:HiS [sample(Ms)])]
 
     %% test cut
-	Ms = [1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0]
-	Music = [cut(start:2.0/44100.0 finish:13.0/44100.0 [sample(Ms)])]
+	% Ms = [1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0]
+	% Music = [cut(start:2.0/44100.0 finish:13.0/44100.0 [sample(Ms)])]
 
 
    Start
@@ -435,7 +347,7 @@ in
 
    % Add variables to this list to avoid "local variable used only once"
    % warnings.
-   {ForAll [NoteToExtended Music] Wait}
+   {ForAll [ExtendNoteOrSilence Music] Wait}
    
    % Calls your code, prints the result and outputs the result to `out.wav`.
    % You don't need to modify this.
