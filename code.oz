@@ -223,6 +223,7 @@ local
 		Ms Max Diffs Final
 	in
 		Ms = {Map MusicsWithInts Scale}
+		{Browse 'Ms'#Ms}
 		Max = {GetMaxLength Ms 0}
 		Diffs = {MakeDiffs Ms Max}
 		Final = {List.zip Ms Diffs CompleteWith0 $}
@@ -283,12 +284,15 @@ local
 		{List.zip NewLowS TmpMusic fun {$ X Y} {Max X Y} end $}
 	end
 
+	fun {EchoFilter Delay Decay Ms P2T}
+		Echo = {List.append {MakeListOfN {FloatToInt Delay*44100.0} 0.0} Ms}
+	in {MergeMusics [Decay#[samples(Echo)] 1.0-Decay#[samples(Ms)]] P2T} end
+
 	%%% Mix Function --
 	% TODO
    % <music> ::= nil | <part> '|' <music>
 	% <filter> ::= 
-	% 		echo(delay:<duration> decay:<factor> <music>) 
-	% 		| fade(start:<duration> out:<duration> <music>)
+	% 		fade(start:<duration> out:<duration> <music>)
 
    fun {Mix P2T Music}
 		fun {Go Part}
@@ -302,13 +306,14 @@ local
 			[] loop(seconds:S Ms) 				then {LoopFilter S {Mix P2T Ms}}
 			[] cut(start:S finish:F Ms) 		then {CutFilter S F {Mix P2T Ms}}
 			[] clip(low:LowS high:HighS Ms) 	then {ClipFilter LowS HighS {Mix P2T Ms}}
+			[] echo(delay:D decay:F Ms)		then {EchoFilter D F {Mix P2T Ms} P2T}
 			[] _ then nil
 			end
 		end
 		Res
 	in
 		Res = {Flatten {Map Music Go}}
-		{Browse Res} 
+		{Browse 'Res'#Res} 
 		Res
    end
 
@@ -318,9 +323,9 @@ local
 
    %Music = {Project.load 'joy.dj.oz'}
 	%Music1 = [partition([a b]) partition([c d])]
-	Music=[partition([
-		stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
-	])]
+	% Music=[echo(delay:1.5 decay:0.4 [partition([
+	% 	stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
+	% ])])]
 	%Music2 = [wave('wave/animals/cat.wav')]
 
 	%Music = [merge([0.5#[sample([0.2 0.2 0.2])] 0.5#[sample([0.6 0.6 ])]])]
@@ -339,6 +344,7 @@ local
 	% Ms = [1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0]
 	% Music = [cut(start:2.0/44100.0 finish:13.0/44100.0 [sample(Ms)])]
 
+	% Music=[echo(delay:3.0/44100.0 decay:0.5 [samples([0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9])] )]
 
    Start
 
