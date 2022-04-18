@@ -328,22 +328,48 @@ local
 		{Append {Repeat NRepeat Music} {List.take Music NTake}}
 	end
 
+	fun {MakeZeros Len}
+		{Map {List.make Len $} fun {$ X} 0.0 end}
+	end
+
+	fun {CutFilter Start Finish Music}
+		% SPEC : start and finish doivent être > 0
+		SampleStart = {FloatToInt Start * 44100.0}
+		SampleFinish = {FloatToInt Finish * 44100.0}
+		TotalLen = SampleFinish - SampleStart
+		
+		CuttedMusic = {List.take {List.drop Music SampleStart} TotalLen } % drop before the start and then take until the finish
+		SilenceLen
+	in
+		if SampleFinish > {Length Music} then
+			SilenceLen = TotalLen - {Length CuttedMusic}  % Taille manquante (silence)
+			{Append CuttedMusic {MakeZeros SilenceLen}}   %%% !!! remplacer par la bonne fonction (pas Make zeros)
+		else
+			CuttedMusic 				
+		end
+
+
+	end
 
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
-			of partition(P) then {SamplePartition {P2T P}}
-			[] sample(S) then S
-			[] wave(Filename) then {Project.readFile Filename}
-			[] merge(Ms) then {MergeMusics Ms}
-			[] reverse(Ms) then {List.reverse {Mix P2T Ms}}
-			[] repeat(amount:N Ms) then {Repeat N {Mix P2T Ms}}
-			[] loop(seconds:S Ms) then {Loop S {Mix P2T Ms}}
+			of partition(P) 			then {SamplePartition {P2T P}}
+			[] sample(S) 				then S
+			[] wave(Filename) 			then {Project.readFile Filename}
+			[] merge(Ms) 				then {MergeMusics Ms}
+			[] reverse(Ms) 				then {List.reverse {Mix P2T Ms}}
+			[] repeat(amount:N Ms) 		then {Repeat N {Mix P2T Ms}}
+			[] loop(seconds:S Ms) 		then {Loop S {Mix P2T Ms}}
+			[] cut(start:S finish:F Ms) then {CutFilter S F {Mix P2T Ms}}
 			[] _ then nil
 			end
 		end
+		Res
 	in
-		{Flatten {Map Music Go}}
+		Res = {Flatten {Map Music Go}}
+		% {Browse Res} 
+		Res
    end
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
