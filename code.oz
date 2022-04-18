@@ -186,11 +186,11 @@ local
 		{Map {List.make Len $} fun {$ X} N end}
 	end
 
-	fun {MergeMusics MusicsWithInts}
+	fun {MergeMusics MusicsWithInts P2T}
 		% [0.1#Mu1 0.4#Mu2 0.5#Mu3]
 		fun {Scale Mus}
 			case Mus
-			of F#M then {Map {Mix PartitionToTimedList M} fun {$ X} F*X end}
+			of F#M then {Map {Mix P2T M} fun {$ X} F*X end}
 			else nil
 			end
 		end
@@ -283,14 +283,20 @@ local
 		{List.zip NewLowS TmpMusic fun {$ X Y} {Max X Y} end $}
 	end
 
-%%% Mix Function --
+	%%% Mix Function --
+	% TODO
+   % <music> ::= nil | <part> '|' <music>
+	% <filter> ::= 
+	% 		echo(delay:<duration> decay:<factor> <music>) 
+	% 		| fade(start:<duration> out:<duration> <music>)
+
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
 			of partition(P) 						then {SamplePartition {P2T P}}
 			[] samples(S) 							then S
 			[] wave(Filename) 					then {Project.readFile Filename}
-			[] merge(Ms) 							then {MergeMusics Ms}
+			[] merge(Ms) 							then {MergeMusics Ms P2T}
 			[] reverse(Ms) 						then {List.reverse {Mix P2T Ms}}
 			[] repeat(amount:N Ms) 				then {RepeatFilter N {Mix P2T Ms}}
 			[] loop(seconds:S Ms) 				then {LoopFilter S {Mix P2T Ms}}
