@@ -270,6 +270,10 @@ local
 		end
 	end
 
+	fun {MakeListOfN Len N} 					% utile pour plusieurs fonctions par la suite
+		{Map {List.make Len $} fun {$ X} N end}
+	end
+
 	fun {MergeMusics MusicsWithInts}
 		% [0.1#Mu1 0.4#Mu2 0.5#Mu3]
 		fun {Scale Mus}
@@ -278,6 +282,7 @@ local
 			else nil
 			end
 		end
+
 		fun {GetMaxLength Xs Cur}
 			case Xs
 			of H|T then
@@ -286,15 +291,15 @@ local
 			[] nil then Cur
 			end
 		end
-		fun {MakeZeros Len}
-			{Map {List.make Len $} fun {$ X} 0.0 end}
-		end
+
 		fun {MakeDiffs Ms Max}
 			{Map Ms fun {$ M} Max-{Length M} end}
 		end
+
 		fun {CompleteWith0 M Diff}
-			{Append M {MakeZeros Diff}}
+			{Append M {MakeListOfN Diff 0.0}}
 		end
+
 		fun {SumMs Ms Acc}
 			case Ms
 			of nil then Acc
@@ -309,8 +314,10 @@ local
 		Max = {GetMaxLength Ms 0}
 		Diffs = {MakeDiffs Ms Max}
 		Final = {List.zip Ms Diffs CompleteWith0 $}
-		{SumMs Final {MakeZeros Max}}
+		{SumMs Final {MakeListOfN Max 0.0}}
 	end
+
+%%% Filter function --
 
 	fun {Repeat N Music}
 		if N==0 then nil
@@ -328,12 +335,9 @@ local
 		{Append {Repeat NRepeat Music} {List.take Music NTake}}
 	end
 
-	fun {MakeZeros Len}
-		{Map {List.make Len $} fun {$ X} 0.0 end}
-	end
-
 	fun {CutFilter Start Finish Music}
 		% SPEC : start and finish doivent être > 0
+		% Note : Start est exclu mais Finish est inclu (dans la liste final)
 		SampleStart = {FloatToInt Start * 44100.0}
 		SampleFinish = {FloatToInt Finish * 44100.0}
 		TotalLen = SampleFinish - SampleStart
@@ -343,35 +347,31 @@ local
 	in
 		if SampleFinish > {Length Music} then
 			SilenceLen = TotalLen - {Length CuttedMusic}  % Taille manquante (silence)
-			{Append CuttedMusic {MakeZeros SilenceLen}}   %%% !!! remplacer par la bonne fonction (pas Make zeros)
+			{Append CuttedMusic {MakeListOfN SilenceLen 0.0} }  
 		else
 			CuttedMusic 				
 		end
-
-
 	end
+
 	fun {ClipFilter LowS HighS Music}
-		fun {MakeList Len N}
-			{Map {List.make Len $} fun {$ X} N end}
-		end
 		LenLowS = {Length LowS}
 		LenHighS = {Length HighS}
 		LenMusic = {Length Music}
 		NewLowS NewHighS TmpMusic
 	in
 		if LenLowS > LenMusic then NewLowS = {List.take LowS LenMusic}
-		elseif LenLowS < LenMusic then NewLowS = {Append LowS {MakeList (LenMusic-LenLowS) ~1.0}}
+		elseif LenLowS < LenMusic then NewLowS = {Append LowS {MakeListOfN (LenMusic-LenLowS) ~1.0}}
 		else NewLowS = LowS end
 
 		if LenHighS > LenMusic then NewHighS = {List.take HighS LenMusic}
-		elseif LenHighS < LenMusic then NewHighS = {Append HighS {MakeList (LenMusic-LenHighS) 1.0}}
+		elseif LenHighS < LenMusic then NewHighS = {Append HighS {MakeListOfN (LenMusic-LenHighS) 1.0}}
 		else NewHighS = HighS end
 
 		TmpMusic = {List.zip NewHighS Music fun {$ X Y} {Min X Y} end $}
 		{List.zip NewLowS TmpMusic fun {$ X Y} {Max X Y} end $}
 	end
 
-
+%%% Mix Function --
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
@@ -383,13 +383,6 @@ local
 			[] repeat(amount:N Ms) 		then {Repeat N {Mix P2T Ms}}
 			[] loop(seconds:S Ms) 		then {Loop S {Mix P2T Ms}}
 			[] cut(start:S finish:F Ms) then {CutFilter S F {Mix P2T Ms}}
-			of partition(P) then {SamplePartition {P2T P}}
-			[] sample(S) then S
-			[] wave(Filename) then {Project.readFile Filename}
-			[] merge(Ms) then {MergeMusics Ms}
-			[] reverse(Ms) then {List.reverse {Mix P2T Ms}}
-			[] repeat(amount:N Ms) then {Repeat N {Mix P2T Ms}}
-			[] loop(seconds:S Ms) then {Loop S {Mix P2T Ms}}
 			[] clip(low:LowS high:HighS Ms) then {ClipFilter LowS HighS {Mix P2T Ms}}
 			[] _ then nil
 			end
@@ -397,11 +390,12 @@ local
 		Res
 	in
 		Res = {Flatten {Map Music Go}}
-		% {Browse Res} 
+		{Browse Res} 
 		Res
    end
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   % TEST
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
    %Music = {Project.load 'joy.dj.oz'}
@@ -417,10 +411,15 @@ local
 
 	% Music = [loop(seconds:3.5 [partition([c g])])]
 
-	LoS = [~0.5 ~0.5 ~0.5 ~0.5 ~0.5]
-	HiS = [0.5 0.5 0.5 0.5 0.5 0.5]
-	Ms = [0.1 0.6 ~0.6 ~0.1 0.0 0.0]
-	Music = [clip(low:LoS high:HiS [sample(Ms)])]
+	%% test clip
+	% LoS = [~0.5 ~0.5 ~0.5 ~0.5 ~0.5]
+	% HiS = [0.5 0.5 0.5 0.5 0.5 0.5]
+	% Ms = [0.1 0.6 ~0.6 ~0.1 0.0 0.0]
+	% Music = [clip(low:LoS high:HiS [sample(Ms)])]
+
+    %% test cut
+	Ms = [1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0]
+	Music = [cut(start:2.0/44100.0 finish:13.0/44100.0 [sample(Ms)])]
 
 
    Start
