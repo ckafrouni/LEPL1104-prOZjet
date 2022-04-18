@@ -350,6 +350,27 @@ local
 
 
 	end
+	fun {ClipFilter LowS HighS Music}
+		fun {MakeList Len N}
+			{Map {List.make Len $} fun {$ X} N end}
+		end
+		LenLowS = {Length LowS}
+		LenHighS = {Length HighS}
+		LenMusic = {Length Music}
+		NewLowS NewHighS TmpMusic
+	in
+		if LenLowS > LenMusic then NewLowS = {List.take LowS LenMusic}
+		elseif LenLowS < LenMusic then NewLowS = {Append LowS {MakeList (LenMusic-LenLowS) ~1.0}}
+		else NewLowS = LowS end
+
+		if LenHighS > LenMusic then NewHighS = {List.take HighS LenMusic}
+		elseif LenHighS < LenMusic then NewHighS = {Append HighS {MakeList (LenMusic-LenHighS) 1.0}}
+		else NewHighS = HighS end
+
+		TmpMusic = {List.zip NewHighS Music fun {$ X Y} {Min X Y} end $}
+		{List.zip NewLowS TmpMusic fun {$ X Y} {Max X Y} end $}
+	end
+
 
    fun {Mix P2T Music}
 		fun {Go Part}
@@ -362,6 +383,14 @@ local
 			[] repeat(amount:N Ms) 		then {Repeat N {Mix P2T Ms}}
 			[] loop(seconds:S Ms) 		then {Loop S {Mix P2T Ms}}
 			[] cut(start:S finish:F Ms) then {CutFilter S F {Mix P2T Ms}}
+			of partition(P) then {SamplePartition {P2T P}}
+			[] sample(S) then S
+			[] wave(Filename) then {Project.readFile Filename}
+			[] merge(Ms) then {MergeMusics Ms}
+			[] reverse(Ms) then {List.reverse {Mix P2T Ms}}
+			[] repeat(amount:N Ms) then {Repeat N {Mix P2T Ms}}
+			[] loop(seconds:S Ms) then {Loop S {Mix P2T Ms}}
+			[] clip(low:LowS high:HighS Ms) then {ClipFilter LowS HighS {Mix P2T Ms}}
 			[] _ then nil
 			end
 		end
@@ -386,7 +415,12 @@ local
 	%Music = [merge([0.5#Music1 0.5#Music2])]
 	%Music = [repeat(amount:3 [partition([c d e f])])]
 
-	Music = [loop(seconds:3.5 [partition([c g])])]
+	% Music = [loop(seconds:3.5 [partition([c g])])]
+
+	LoS = [~0.5 ~0.5 ~0.5 ~0.5 ~0.5]
+	HiS = [0.5 0.5 0.5 0.5 0.5 0.5]
+	Ms = [0.1 0.6 ~0.6 ~0.1 0.0 0.0]
+	Music = [clip(low:LoS high:HiS [sample(Ms)])]
 
 
    Start
