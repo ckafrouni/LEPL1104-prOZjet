@@ -231,20 +231,20 @@ local
 
 %%% Filter function --
 
-	fun {Repeat N Music}
+	fun {RepeatFilter N Music}
 		if N==0 then nil
-		else {Flatten Music|{Repeat N-1 Music}} % {Flatten Music|Music|nil}
+		else {Flatten Music|{RepeatFilter N-1 Music}} % {Flatten Music|Music|nil}
 		end
 	end
 
-	fun {Loop S Music}
+	fun {LoopFilter S Music}
 		% SPEC: S est un float
 		TotalLen = {FloatToInt S * 44100.0}
 		Len = {Length Music}
 		NRepeat = TotalLen div Len
 		NTake = TotalLen mod Len
 	in
-		{Append {Repeat NRepeat Music} {List.take Music NTake}}
+		{Append {RepeatFilter NRepeat Music} {List.take Music NTake}}
 	end
 
 	fun {CutFilter Start Finish Music}
@@ -287,15 +287,15 @@ local
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
-			of partition(P) 			then {SamplePartition {P2T P}}
-			[] samples(S) 				then S
-			[] wave(Filename) 			then {Project.readFile Filename}
-			[] merge(Ms) 				then {MergeMusics Ms}
-			[] reverse(Ms) 				then {List.reverse {Mix P2T Ms}}
-			[] repeat(amount:N Ms) 		then {Repeat N {Mix P2T Ms}}
-			[] loop(seconds:S Ms) 		then {Loop S {Mix P2T Ms}}
-			[] cut(start:S finish:F Ms) then {CutFilter S F {Mix P2T Ms}}
-			[] clip(low:LowS high:HighS Ms) then {ClipFilter LowS HighS {Mix P2T Ms}}
+			of partition(P) 						then {SamplePartition {P2T P}}
+			[] samples(S) 							then S
+			[] wave(Filename) 					then {Project.readFile Filename}
+			[] merge(Ms) 							then {MergeMusics Ms}
+			[] reverse(Ms) 						then {List.reverse {Mix P2T Ms}}
+			[] repeat(amount:N Ms) 				then {RepeatFilter N {Mix P2T Ms}}
+			[] loop(seconds:S Ms) 				then {LoopFilter S {Mix P2T Ms}}
+			[] cut(start:S finish:F Ms) 		then {CutFilter S F {Mix P2T Ms}}
+			[] clip(low:LowS high:HighS Ms) 	then {ClipFilter LowS HighS {Mix P2T Ms}}
 			[] _ then nil
 			end
 		end
