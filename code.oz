@@ -46,11 +46,60 @@ local
       Factor = Duration/CurrentLength   
    in {StretchTransform Partition Factor} end
 
+	fun {TransposeTransform Is N}	
+		% C C# D D# E F F# G G# A A# B
+		fun {AddSemitone Note}
+			if Note.sharp == true then case Note.name
+				of c then note(name:d sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] d then note(name:e sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] f then note(name:g sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] g then note(name:a sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] a then note(name:b sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) end
+			else case Note.name
+				of c then note(name:c sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] d then note(name:d sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] f then note(name:f sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] g then note(name:g sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] a then note(name:a sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] e then note(name:f sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) 
+				[] b then note(name:c sharp:false octave:Note.octave+1 duration:Note.duration instrument:Note.instrument) end
+			end
+		end
+		fun {RemoveSemitone Note}
+			if Note.sharp == true then case Note.name
+				of c then note(name:c sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] d then note(name:d sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] f then note(name:f sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] g then note(name:g sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] a then note(name:a sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) end
+			else case Note.name
+				of c then note(name:b sharp:false octave:Note.octave-1 duration:Note.duration instrument:Note.instrument)
+				[] d then note(name:c sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] e then note(name:d sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] f then note(name:e sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] g then note(name:f sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] a then note(name:g sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument) 
+				[] b then note(name:a sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument) end
+			end
+		end
+
+		fun {TransposeUp I}
+			case I of note(name:_ sharp:_ octave:_ duration:_ instrument:_) then {AddSemitone I}
+			[] _|_ then {List.map I AddSemitone} end
+		end
+		fun {TransposeDown I}
+			case I of note(name:_ sharp:_ octave:_ duration:_ instrument:_) then {RemoveSemitone I}
+			[] _|_ then {List.map I RemoveSemitone} end
+		end
+	in
+		if N > 0 then {TransposeTransform {List.map Is TransposeUp} N-1}
+		elseif N < 0 then {TransposeTransform {List.map Is TransposeDown} N+1}
+		else Is
+		end
+	end
+
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   % TODO:
-   % <transformation> ::=
-   %    | transpose(semitones:<integer> <partition>)
-   %    ;
+
    fun {PartitionToTimedList Partition}
 		% Return: <extended sound> wrapped in brackets
 		fun {ExtendItem I}
@@ -59,7 +108,7 @@ local
 			[] drone(note:X amount:N) then {DroneTransform {ExtendItem X} N}
 			[] stretch(factor:F Is) then {StretchTransform {PartitionToTimedList Is} F}
 			[] duration(seconds:D Is) then {DurationTransform {PartitionToTimedList Is} D}
-			% [] transpose(semitones:N Is) then {TransposeTransform {PartitionToTimedList Is} N}
+			[] transpose(semitones:N Is) then {TransposeTransform {PartitionToTimedList Is} N}
 			else [{ExtendNoteOrSilence I}] % Item is a note/silence
 			end
 		end
@@ -67,6 +116,7 @@ local
       {List.map Partition ExtendItem Result}
       {List.foldR Result List.append nil}
    end
+	
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -99,8 +149,7 @@ local
    % @post retourne une <extended note> transposee d'un demi-ton vers le bas
    %       imprime non-existante si on essaye de transposer c-1
    fun{RemoveSemi Note}
-      if Note.sharp==true then
-	 		note(name:Note.name octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
+      if Note.sharp==true then note(name:Note.name octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
       else case Note.name 
 			of c then
 	      	local X=Note.octave-1 in
@@ -118,27 +167,24 @@ local
       end
    end
 
-	   %@pre prend une <extended note> en argument
+	%@pre prend une <extended note> en argument
    %@post renvoie le nombre de demi-ton qui separe cette note et la note "c" de la meme octave que la note en argument
    fun{CountSemiFromC Note}
-      local fun{CountAcc Note Ref Acc}
-	       if Ref.name==Note.name andthen Ref.octave==Note.octave andthen Ref.sharp==Note.sharp then Acc
-	       else
-		  {CountAcc Note {AddSemi Ref} Acc+1}
-	       end
-	    end
-      in
-	 {CountAcc Note note(name:c octave:Note.octave sharp:false duration:1.0 instrument:none) 0}
+   	fun{CountAcc Note Ref Acc}
+			if Ref.name==Note.name 
+				andthen Ref.octave==Note.octave 
+					andthen Ref.sharp==Note.sharp then Acc
+			else {CountAcc Note {AddSemi Ref} Acc+1} end
+	   end
+   in {CountAcc Note note(name:c octave:Note.octave sharp:false duration:1.0 instrument:none) 0} end
+
+	fun {GetHeight Note}
+      case Note of silence(duration:_) then 0
+      [] _ then 
+			if Note.octave =<4 then 12*(Note.octave-4)+{CountSemiFromC Note}-9
+			else 3+12*(Note.octave-4-1)+{CountSemiFromC Note} end
       end
    end
-
-	fun{GetHeight Note}
-		case Note of silence(duration:_) then 0
-			else if Note.octave =<4 then 12*(Note.octave-4)+{CountSemiFromC Note}-9
-			elseif Note.octave >4 then 3+12*(Note.octave-4-1)+{CountSemiFromC Note}
-			end
-		end
-	end
 
 %-------- A RETRAVAILLER 
 
@@ -223,7 +269,6 @@ local
 		Ms Max Diffs Final
 	in
 		Ms = {Map MusicsWithInts Scale}
-		{Browse 'Ms'#Ms}
 		Max = {GetMaxLength Ms 0}
 		Diffs = {MakeDiffs Ms Max}
 		Final = {List.zip Ms Diffs CompleteWith0 $}
@@ -313,7 +358,7 @@ local
 		Res
 	in
 		Res = {Flatten {Map Music Go}}
-		{Browse 'Res'#Res} 
+		% {Browse 'Res'#Res} 
 		Res
    end
 
@@ -323,9 +368,9 @@ local
 
    %Music = {Project.load 'joy.dj.oz'}
 	%Music1 = [partition([a b]) partition([c d])]
-	% Music=[echo(delay:1.5 decay:0.4 [partition([
-	% 	stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
-	% ])])]
+	Music=[echo(delay:1.5 decay:0.4 [partition([
+		stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
+	])])]
 	%Music2 = [wave('wave/animals/cat.wav')]
 
 	%Music = [merge([0.5#[sample([0.2 0.2 0.2])] 0.5#[sample([0.6 0.6 ])]])]
