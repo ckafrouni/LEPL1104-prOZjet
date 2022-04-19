@@ -3,10 +3,16 @@ local
    [Project] = {Link ['Project2022.ozf']}
    Time = {Link ['x-oz://boot/Time']}.1.getReferenceTime
 
+	
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	% PartitionToTimedList FUNCTION
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-   % Translate a note to the extended notation.
+	/**
+	 * Function converts a note to its extended form. 
+	 * Params: Note: <note>|<extended note>
+	 * Return: <extended note>
+	 */
    fun {ExtendNoteOrSilence Note}
       case Note
       of note(duration:_ instrument:_ name:_ octave:_ sharp:_) then Note
@@ -21,12 +27,26 @@ local
       end
    end
 
-   fun {DroneTransform NoteOrChord Amount}
+	/**
+	 * Repeats a drone or a chord multiple times.
+	 * Params: 
+	 * 	X: <extended note>|<extended chord>
+	 *		N: integer
+	 * Return: <flat partition>
+	 */
+   fun {DroneTransform X N}
 		{List.foldR 
-			{List.map {List.make Amount} fun {$ _} NoteOrChord end}
+			{List.map {List.make N} fun {$ _} X end}
 			List.append nil}
    end
 
+	/**
+	 * Stretch every item in the partition by a factor.
+	 * Params: 
+	 * 	Partition: <flat partition> (List of extended sounds)
+	 *		Factor: float
+	 * Return: <flat partition>
+	 */
    fun {StretchTransform Partition Factor}
       fun {Mapper I} 
          case I of _|_ then {List.map I Mapper}
@@ -36,7 +56,15 @@ local
          end
       end 
    in {List.map Partition Mapper} end
-
+	
+	/**
+	 * Set partition's total length to Duration. 
+	 *	Every item is stretched accordingly.
+	 * Params: 
+	 * 	Partition: <flat partition> (List of extended sounds)
+	 *		Duration: float
+	 * Return: <flat partition>
+	 */
    fun {DurationTransform Partition Duration}
       fun {AccTime X Acc}
          case X of Note|_ then Note.duration + Acc
@@ -46,7 +74,15 @@ local
       Factor = Duration/CurrentLength   
    in {StretchTransform Partition Factor} end
 
-	fun {TransposeTransform Is N}	
+	/**
+	 * Adds N semitones to every item in the Partition,
+	 *	ignoring silences.
+	 * Params: 
+	 * 	Partition: <flat partition> (List of extended sounds)
+	 *		N: integer
+	 * Return: <flat partition>
+	 */
+	fun {TransposeTransform Partition N}	
 		% C C# D D# E F F# G G# A A# B
 		fun {AddSemitone Note}
 			if Note.sharp == true then case Note.name
@@ -92,17 +128,22 @@ local
 			[] _|_ then {List.map I RemoveSemitone} end
 		end
 	in
-		if N > 0 then {TransposeTransform {List.map Is TransposeUp} N-1}
-		elseif N < 0 then {TransposeTransform {List.map Is TransposeDown} N+1}
-		else Is
+		if N > 0 then {TransposeTransform {List.map Partition TransposeUp} N-1}
+		elseif N < 0 then {TransposeTransform {List.map Partition TransposeDown} N+1}
+		else Partition
 		end
 	end
 
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	
+   %----------------------------------------------------------------------------%
+	/**
+	 * Converts a <partition> to a <flat partition>. Meaning the result is only
+	 * composed of <extended sounds>. ie: <extended notes>|<extended chords>
+	 * Params: Partition: <partition>
+	 * Return: <flat partition>
+	 */
    fun {PartitionToTimedList Partition}
-		% Return: <extended sound> wrapped in brackets
 		fun {ExtendItem I}
+			% Return: List of <extended sound>
 			case I of nil then nil
 			[] _|_ then [{List.map I ExtendNoteOrSilence}] % Item is a chord
 			[] drone(note:X amount:N) then {DroneTransform {ExtendItem X} N}
@@ -117,9 +158,10 @@ local
       {List.foldR Result List.append nil}
    end
 	
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	% MIX FUNCTIONS
+   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	fun {SampleFromNote Note}
 		fun {GetHeight Note} 
@@ -275,12 +317,11 @@ local
 		Echo = {List.append {MakeListOfN {FloatToInt Delay*44100.0} 0.0} Ms}
 	in {MergeMusics [Decay#[samples(Echo)] 1.0-Decay#[samples(Ms)]] P2T} end
 
-	%%% Mix Function --
+	%----------------------------------------------------------------------------%
 	% TODO
    % <music> ::= nil | <part> '|' <music>
 	% <filter> ::= 
 	% 		fade(start:<duration> out:<duration> <music>)
-
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
@@ -305,7 +346,7 @@ local
    end
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   % TEST
+   % TESTS
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
    %Music = {Project.load 'joy.dj.oz'}
