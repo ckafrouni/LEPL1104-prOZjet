@@ -99,7 +99,7 @@ local
 	end
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+	
    fun {PartitionToTimedList Partition}
 		% Return: <extended sound> wrapped in brackets
 		fun {ExtendItem I}
@@ -120,75 +120,17 @@ local
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-	%-------- A RETRAVAILLER 
-
-	   % @ pre Note est un element de type <extendedNote>
-   % @ post retourne un element de type <extendedNote> décalé d'un demi-ton vers le haut
-   %          imprime non-existante si on essaye de transposer b14
-   fun{AddSemi Note}
-      if Note.sharp == false then
-	 		if {Not (Note.name==e orelse Note.name==b)} then
-	    		note(name:Note.name octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
-	 		elseif Note.name==e then
-	       	note(name:f octave:Note.octave sharp:Note.sharp duration:Note.duration instrument:Note.instrument)
-	    	elseif Note.octave>=14 then 'non-existante'
-	      else note(name:c octave:(Note.octave+1) sharp:Note.sharp duration:Note.duration instrument:Note.instrument)
-	 		end
-      else
-			case Note.name
-			of c then note(name:d octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
-			[] d then note(name:e octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
-			[] f then note(name:g octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
-			[] g then note(name:a octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
-			[] a then note(name:b octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
-			end
-      end
-   end
-
-	   % @pre Note est un élément de type <extended note>
-   % @post retourne une <extended note> transposee d'un demi-ton vers le bas
-   %       imprime non-existante si on essaye de transposer c-1
-   fun{RemoveSemi Note}
-      if Note.sharp==true then note(name:Note.name octave:Note.octave sharp:false duration:Note.duration instrument:Note.instrument)
-      else case Note.name 
-			of c then
-	      	local X=Note.octave-1 in
-					if X<~1 then 'non-existante'
-					else note(name:b octave:X sharp:Note.sharp duration:Note.duration instrument:Note.instrument)
-					end
-				end
-			[]f then note(name:e octave:Note.octave sharp:Note.sharp duration:Note.duration instrument:Note.instrument)
-			[]a then note(name:g octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
-			[]b then note(name:a octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
-			[]d then note(name:c octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
-			[]e then note(name:d octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
-			[]g then note(name:f octave:Note.octave sharp:true duration:Note.duration instrument:Note.instrument)
-			end
-      end
-   end
-
-	%@pre prend une <extended note> en argument
-   %@post renvoie le nombre de demi-ton qui separe cette note et la note "c" de la meme octave que la note en argument
-   fun{CountSemiFromC Note}
-   	fun{CountAcc Note Ref Acc}
-			if Ref.name==Note.name 
-				andthen Ref.octave==Note.octave 
-					andthen Ref.sharp==Note.sharp then Acc
-			else {CountAcc Note {AddSemi Ref} Acc+1} end
-	   end
-   in {CountAcc Note note(name:c octave:Note.octave sharp:false duration:1.0 instrument:none) 0} end
-
-	fun {GetHeight Note}
-      case Note of silence(duration:_) then 0
-      [] _ then 
-			if Note.octave =<4 then 12*(Note.octave-4)+{CountSemiFromC Note}-9
-			else 3+12*(Note.octave-4-1)+{CountSemiFromC Note} end
-      end
-   end
-
-%-------- A RETRAVAILLER 
 
 	fun {SampleFromNote Note}
+		fun {GetHeight Note} 
+			% 12*(O-4)-Counter
+			% C3 C#3 D3 D#3 E3 F3 F#3 G3 G#3 A3 A#3 B3 C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 |A4| A#4 B4 C5 C#5 D5 D#5 E5 F5 F#5 G5 G#5 A5 A#5 B5
+			fun {HeightAcc Note Acc}
+				if Note.name == a andthen Note.sharp == false then 12*(Note.octave-4)-Acc
+				else {HeightAcc {TransposeTransform [Note] 1}.1 Acc+1} end
+			end
+		in case Note of silence(duration:_) then 0 else {HeightAcc Note 0} end end
+	
 		Height = {IntToFloat {GetHeight Note}} % float
 		Freq = {Pow 2.0 (Height/12.0)} * 440.0
 		SampleSize = {StringToFloat Note.duration} * 44100.0
