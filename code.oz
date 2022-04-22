@@ -317,6 +317,47 @@ local
 		Echo = {List.append {MakeListOfN {FloatToInt Delay*44100.0} 0.0} Ms}
 	in {MergeMusics [Decay#[samples(Echo)] 1.0-Decay#[samples(Ms)]] P2T} end
 
+	% Fade Filter
+	fun {FadeFilter Time_in Time_out Music}
+
+		fun {MultList L1 L2} {List.zip L1 L2 fun {$ Xi Yi} Xi*Yi end $}
+		end % multiply 2 lists element wize
+		fun {GetFadeFilter SampleSize}
+			% Return a list to multiply the music with          ex. if samplesize = 5
+			Factor = 1.0/{IntToFloat SampleSize}                % --> 1/5
+			L = {MakeListOfN SampleSize 1.0}                    % --> [1 1 1 1 1] 
+		in
+			{Append [0.0] {List.mapInd L fun {$ I A} {IntToFloat I} * Factor end}} % --> [0 0.2 0.4 0.8 1]
+		end
+
+		Time_in_S = {FloatToInt Time_in * 44100.0}
+		Time_out_S = {FloatToInt Time_out * 44100.0}
+		Middle_len  = {Length Music} - (Time_out_S+1) - (Time_in_S+1)
+
+		Finish_time StartSample FinalSample MiddleSample FadedStart FadedFinal Res
+	in 
+		if Middle_len < 0 then
+			Res = 'The given music is to short to apply FadeFilter'
+			Res
+		else
+			% avoir une liste de la taille de fade_in
+			% la remplir de nombre de 0 à 1 qui croissent linéairement
+			% multiplier le début de la music par cette liste 
+			% pareil pour la fin
+			% ajouter début_faded + milieu normal + fin_faded
+			Finish_time = {Length Music} - (Time_out_S+1)
+			
+			StartSample  = {List.take Music (Time_in_S+1) }
+			FinalSample  = {List.drop Music Finish_time}   %Note pour économiser la mémoire on pourrait mettre le calcul de finish dedant direct
+			MiddleSample = {List.take {List.drop Music (Time_in_S+1)} Middle_len } % drop before the start and then take until the finish
+		
+			FadedStart = {MultList StartSample {GetFadeFilter Time_in_S }}
+			FadedFinal = {MultList FinalSample {Reverse {GetFadeFilter Time_out_S }}}	
+
+			{Append {Append FadedStart MiddleSample} FadedFinal }
+		end
+	end
+
 	%----------------------------------------------------------------------------%
 	% TODO
    % <music> ::= nil | <part> '|' <music>
@@ -325,16 +366,17 @@ local
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
-			of partition(P) 						then {SamplePartition {P2T P}}
-			[] samples(S) 							then S
+			of partition(P) 					then {SamplePartition {P2T P}}
+			[] samples(S) 						then S
 			[] wave(Filename) 					then {Project.readFile Filename}
-			[] merge(Ms) 							then {MergeMusics Ms P2T}
+			[] merge(Ms) 						then {MergeMusics Ms P2T}
 			[] reverse(Ms) 						then {List.reverse {Mix P2T Ms}}
 			[] repeat(amount:N Ms) 				then {RepeatFilter N {Mix P2T Ms}}
 			[] loop(seconds:S Ms) 				then {LoopFilter S {Mix P2T Ms}}
 			[] cut(start:S finish:F Ms) 		then {CutFilter S F {Mix P2T Ms}}
 			[] clip(low:LowS high:HighS Ms) 	then {ClipFilter LowS HighS {Mix P2T Ms}}
-			[] echo(delay:D decay:F Ms)		then {EchoFilter D F {Mix P2T Ms} P2T}
+			[] echo(delay:D decay:F Ms)			then {EchoFilter D F {Mix P2T Ms} P2T} 
+			[] fade(start:Time_in finish:Time_out Ms) then {FadeFilter Time_in Time_out {Mix P2T Ms}}
 			[] _ then nil
 			end
 		end
@@ -373,7 +415,10 @@ local
 	% Music = [cut(start:2.0/44100.0 finish:13.0/44100.0 [sample(Ms)])]
 
 	% Music=[echo(delay:3.0/44100.0 decay:0.5 [samples([0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9])] )]
-
+    
+	%% test fade
+	Ms = [1.0 1.0 1.0 1.0 1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0 1.0 1.0 1.0]
+	Music = [fade(start:5.0/44100.0 finish:5.0/44100.0 [sample(Ms)])]
    Start
 
    % Uncomment next line to insert your tests.
