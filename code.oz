@@ -24,6 +24,7 @@ local
          of [_] then note(name:Atom octave:4 sharp:false duration:1.0 instrument:none)
          [] [N O] then note(name:{StringToAtom [N]} octave:{StringToInt [O]} sharp:false duration:1.0 instrument: none)
          end
+	  else nil
       end
    end
 
@@ -145,17 +146,26 @@ local
 		fun {ExtendItem I}
 			% Return: List of <extended sound>
 			case I of nil then nil
-			[] _|_ then [{List.map I ExtendNoteOrSilence}] % Item is a chord
+			[] _|_ then Res in
+				Res=[{List.map I ExtendNoteOrSilence}] % Item is a chord
+				{Browse Res}
+				Res
 			[] drone(note:X amount:N) then {DroneTransform {ExtendItem X} N}
 			[] stretch(factor:F Is) then {StretchTransform {PartitionToTimedList Is} F}
 			[] duration(seconds:D Is) then {DurationTransform {PartitionToTimedList Is} D}
 			[] transpose(semitones:N Is) then {TransposeTransform {PartitionToTimedList Is} N}
-			else [{ExtendNoteOrSilence I}] % Item is a note/silence
+			else Res in 
+				Res=[{ExtendNoteOrSilence I}] % Item is a note/silence
+				{Browse Res}
+				Res
 			end
 		end
-      Result in
+      Result Res
+	in
       {List.map Partition ExtendItem Result}
-      {List.foldR Result List.append nil}
+      Res = {List.foldR Result List.append nil}
+	  {Browse 'Res P2T'#Res} 
+	  Res
    end
 	
 
@@ -322,40 +332,29 @@ local
 
 		fun {MultList L1 L2} {List.zip L1 L2 fun {$ Xi Yi} Xi*Yi end $}
 		end % multiply 2 lists element wize
+
 		fun {GetFadeFilter SampleSize}
 			% Return a list to multiply the music with          ex. if samplesize = 5
 			Factor = 1.0/{IntToFloat SampleSize}                % --> 1/5
 			L = {MakeListOfN SampleSize 1.0}                    % --> [1 1 1 1 1] 
 		in
-			{Append [0.0] {List.mapInd L fun {$ I A} {IntToFloat I} * Factor end}} % --> [0 0.2 0.4 0.8 1]
+			{Append [0.0] {List.mapInd L fun {$ I A} {IntToFloat I} * Factor end $}} % --> [0 0.2 0.4 0.8 1]
 		end
 
 		Time_in_S = {FloatToInt Time_in * 44100.0}
 		Time_out_S = {FloatToInt Time_out * 44100.0}
 		Middle_len  = {Length Music} - (Time_out_S+1) - (Time_in_S+1)
 
-		Finish_time StartSample FinalSample MiddleSample FadedStart FadedFinal Res
-	in 
-		if Middle_len < 0 then
-			Res = 'The given music is to short to apply FadeFilter'
-			Res
-		else
-			% avoir une liste de la taille de fade_in
-			% la remplir de nombre de 0 à 1 qui croissent linéairement
-			% multiplier le début de la music par cette liste 
-			% pareil pour la fin
-			% ajouter début_faded + milieu normal + fin_faded
-			Finish_time = {Length Music} - (Time_out_S+1)
-			
-			StartSample  = {List.take Music (Time_in_S+1) }
-			FinalSample  = {List.drop Music Finish_time}   %Note pour économiser la mémoire on pourrait mettre le calcul de finish dedant direct
-			MiddleSample = {List.take {List.drop Music (Time_in_S+1)} Middle_len } % drop before the start and then take until the finish
-		
-			FadedStart = {MultList StartSample {GetFadeFilter Time_in_S }}
-			FadedFinal = {MultList FinalSample {Reverse {GetFadeFilter Time_out_S }}}	
+		Finish_time = {Length Music} - (Time_out_S+1)
 
-			{Append {Append FadedStart MiddleSample} FadedFinal }
-		end
+		StartSample  = {List.take Music (Time_in_S+1) }
+		FinalSample  = {List.drop Music Finish_time}   %Note pour économiser la mémoire on pourrait mettre le calcul de finish dedant direct
+		MiddleSample = {List.take {List.drop Music (Time_in_S+1)} Middle_len } % drop before the start and then take until the finish
+
+		FadedStart = {MultList StartSample {GetFadeFilter Time_in_S }}
+		FadedFinal = {MultList FinalSample {Reverse {GetFadeFilter Time_out_S }}}	
+	in
+		{Append {Append FadedStart MiddleSample} FadedFinal }
 	end
 
 	%----------------------------------------------------------------------------%
@@ -383,7 +382,7 @@ local
 		Res
 	in
 		Res = {Flatten {Map Music Go}}
-		% {Browse 'Res'#Res} 
+		%{Browse 'Res Mix'#Res} 
 		Res
    end
 
@@ -393,12 +392,12 @@ local
 
    %Music = {Project.load 'joy.dj.oz'}
 	%Music1 = [partition([a b]) partition([c d])]
-	Music=[echo(delay:1.5 decay:0.4 [partition([
-		stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
-	])])]
+	% Music=[echo(delay:1.5 decay:0.4 [partition([
+	% 	stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
+	% ])])]
 	%Music2 = [wave('wave/animals/cat.wav')]
 
-	%Music = [merge([0.5#[sample([0.2 0.2 0.2])] 0.5#[sample([0.6 0.6 ])]])]
+	%Music = [merge([0.5#[samples([0.2 0.2 0.2])] 0.5#[samples([0.6 0.6 ])]])]
 	%Music = [merge([0.5#Music1 0.5#Music2])]
 	%Music = [repeat(amount:3 [partition([c d e f])])]
 
@@ -408,17 +407,21 @@ local
 	% LoS = [~0.5 ~0.5 ~0.5 ~0.5 ~0.5]
 	% HiS = [0.5 0.5 0.5 0.5 0.5 0.5]
 	% Ms = [0.1 0.6 ~0.6 ~0.1 0.0 0.0]
-	% Music = [clip(low:LoS high:HiS [sample(Ms)])]
+	% Music = [clip(low:LoS high:HiS [samples(Ms)])]
 
     %% test cut
 	% Ms = [1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0]
-	% Music = [cut(start:2.0/44100.0 finish:13.0/44100.0 [sample(Ms)])]
+	% Music = [cut(start:2.0/44100.0 finish:13.0/44100.0 [samples(Ms)])]
 
 	% Music=[echo(delay:3.0/44100.0 decay:0.5 [samples([0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9])] )]
     
 	%% test fade
-	Ms = [1.0 1.0 1.0 1.0 1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0 1.0 1.0 1.0]
-	Music = [fade(start:5.0/44100.0 finish:5.0/44100.0 [sample(Ms)])]
+	% Ms = [1.0 1.0 1.0 1.0 1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0 1.0 1.0 1.0]
+	% Ms = [a a a a a a a]
+	% Music = [fade(start:2.0 finish:3.0 [partition(Ms)])]
+
+	% Test empty chords
+	Music = [partition([a b nil c])]
    Start
 
    % Uncomment next line to insert your tests.
