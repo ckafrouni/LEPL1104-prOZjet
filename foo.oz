@@ -18,7 +18,7 @@ local
         Factor = 1.0/{IntToFloat SampleSize}                % --> 1/5
         L = {MakeListOfN SampleSize 1.0}                    % --> [1 1 1 1 1] 
     in
-        {Append [0.0] {List.mapInd L fun {$ I A} {IntToFloat I} * Factor end}} % --> [0 0.2 0.4 0.8 1]
+        {Append [0.0] {List.mapInd L fun {$ I A} {IntToFloat I} * Factor end $}} % --> [0 0.2 0.4 0.8 1]
     end
     
     Sample = [1.0 1.0 1.0 1.0 1.0 1.0]
