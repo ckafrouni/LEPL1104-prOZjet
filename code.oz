@@ -1,3 +1,8 @@
+/* *** PrOZjet 2022 - Oz Player - LINFO 1401 ***
+Christophe KAFROUNI – 
+Tom KENDA 			– 32001700
+*/
+
 local
    % See project statement for API details.
    [Project] = {Link ['Project2022.ozf']}
@@ -20,10 +25,11 @@ local
       [] silence then silence(duration:1.0)
       [] Name#Octave then note(name:Name octave:Octave sharp:true duration:1.0 instrument:none)
       [] Atom then
-         case {AtomToString Atom}
-         of [_] then note(name:Atom octave:4 sharp:false duration:1.0 instrument:none)
-         [] [N O] then note(name:{StringToAtom [N]} octave:{StringToInt [O]} sharp:false duration:1.0 instrument: none)
-         end
+		case {AtomToString Atom}
+        of [_] then note(name:Atom octave:4 sharp:false duration:1.0 instrument:none)
+        [] [N O] then note(name:{StringToAtom [N]} octave:{StringToInt [O]} sharp:false duration:1.0 instrument: none)
+        else nil % si un a un accord vide [nil] ca rentre ici car nil est une atom
+		end
 	  else nil
       end
    end
@@ -145,26 +151,29 @@ local
    fun {PartitionToTimedList Partition}
 		fun {ExtendItem I}
 			% Return: List of <extended sound>
-			case I of nil then nil
-			[] _|_ then Res in
-				Res=[{List.map I ExtendNoteOrSilence}] % Item is a chord
-				{Browse Res}
-				Res
+			case I 
+			of nil then nil
+			[] H|T then Res in 			% Item is a chord
+				case H#T 
+				of nil#nil then [nil] 	% Item is an empty chord
+				else 					% else : normal chord
+					%{Browse 'chord : '#[{List.map I ExtendNoteOrSilence}]}
+					[{List.map I ExtendNoteOrSilence}]
+				end
 			[] drone(note:X amount:N) then {DroneTransform {ExtendItem X} N}
 			[] stretch(factor:F Is) then {StretchTransform {PartitionToTimedList Is} F}
 			[] duration(seconds:D Is) then {DurationTransform {PartitionToTimedList Is} D}
 			[] transpose(semitones:N Is) then {TransposeTransform {PartitionToTimedList Is} N}
-			else Res in 
-				Res=[{ExtendNoteOrSilence I}] % Item is a note/silence
-				{Browse Res}
-				Res
+			else 
+				%{Browse 'Note : '#[{ExtendNoteOrSilence I}]}  
+				[{ExtendNoteOrSilence I}] 		% Item is a note/silence
 			end
 		end
       Result Res
 	in
       {List.map Partition ExtendItem Result}
       Res = {List.foldR Result List.append nil}
-	  {Browse 'Res P2T'#Res} 
+	  %{Browse 'Res P2T'#Res} 
 	  Res
    end
 	
@@ -178,20 +187,35 @@ local
 			% 12*(O-4)-Counter
 			% C3 C#3 D3 D#3 E3 F3 F#3 G3 G#3 A3 A#3 B3 C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 |A4| A#4 B4 C5 C#5 D5 D#5 E5 F5 F#5 G5 G#5 A5 A#5 B5
 			fun {HeightAcc Note Acc}
+				%{Browse 'heightacc:'#Note}
 				if Note.name == a andthen Note.sharp == false then 12*(Note.octave-4)-Acc
 				else {HeightAcc {TransposeTransform [Note] 1}.1 Acc+1} end
 			end
-		in case Note of silence(duration:_) then 0 else {HeightAcc Note 0} end end
-	
-		Height = {IntToFloat {GetHeight Note}} % float
-		Freq = {Pow 2.0 (Height/12.0)} * 440.0
-		SampleSize = {StringToFloat Note.duration} * 44100.0
-		Is = {List.number 1 {FloatToInt SampleSize} 1}
-		fun {CalcAi I} X in 
-			X = 2.0 * 3.14 * Freq * {IntToFloat I}
-			0.5 * {Sin X/SampleSize $} 
+		in 
+			case Note 
+			of silence(duration:_) then 0 
+			else {HeightAcc Note 0} 
+			end 
 		end
+
+		case Note
+		of nil then Is = [nil] 		% si accord vide
+		else 						% si note normal
+			Height = {IntToFloat {GetHeight Note}} % float
+			Freq = {Pow 2.0 (Height/12.0)} * 440.0
+			SampleSize = {StringToFloat Note.duration} * 44100.0
+			Is = {List.number 1 {FloatToInt SampleSize} 1}
+		end
+		fun {CalcAi I} X in			% fonction qui calcule Ai pour chaque pas de temps
+			case I of nil then 0.0 	% si accord vide %%%%%%%%%% j'ai pas trouvé d'autre manière de faire ... on peut pas juste skip et pas mettre de chiffre ..?
+			else					% si accord normal
+				X = 2.0 * 3.14159265359 * Freq * {IntToFloat I}
+				0.5 * {Sin X/SampleSize $} 
+			end
+		end
+	Is Height Freq SampleSize
 	in
+		% {Browse {Map Is CalcAi}}
 		{Map Is CalcAi}
 	end
 
@@ -379,18 +403,16 @@ local
 			[] _ then nil
 			end
 		end
-		Res
 	in
-		Res = {Flatten {Map Music Go}}
-		%{Browse 'Res Mix'#Res} 
-		Res
+		%{Browse 'Res Mix'#{Flatten {Map Music Go}}} 
+		{Flatten {Map Music Go}}
    end
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
    % TESTS
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-   %Music = {Project.load 'joy.dj.oz'}
+   
 	%Music1 = [partition([a b]) partition([c d])]
 	% Music=[echo(delay:1.5 decay:0.4 [partition([
 	% 	stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
@@ -421,7 +443,12 @@ local
 	% Music = [fade(start:2.0 finish:3.0 [partition(Ms)])]
 
 	% Test empty chords
-	Music = [partition([a b nil c])]
+	Music = [partition([a b [nil] ])]
+	
+	
+	% pour la soumision finale :
+	% Music = {Project.load 'example.dj.oz'}
+
    Start
 
    % Uncomment next line to insert your tests.
