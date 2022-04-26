@@ -51,7 +51,7 @@ local
 
 
     %Music = [partition([a b [nil] c])]
-    Chord =  [nil]
+    Chord =  nil
 Res
 in
     %{Browse Music}
@@ -85,7 +85,5 @@ in
     {Browse {Append {Map Is CalcAi } {Map Ls CalcAi } }}
 end
 
-% %% out :
-% 'TestEmptyChords:duration'
-% actual([note(duration:2 instrument:none name:a octave:0 sharp:false) note(duration:2 instrument:none name:b octave:1 sharp:true)])
-% expect([note(duration:2 instrument:none name:a octave:0 sharp:false) note(duration:2 instrument:none name:b octave:1 sharp:true) nil])
+{Browse {Append [ 1 2] {Append nil {Append [3 4] nil } } } }
+

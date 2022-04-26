@@ -97,7 +97,9 @@ local
 				[] d then note(name:e sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] f then note(name:g sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] g then note(name:a sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
-				[] a then note(name:b sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) end
+				[] a then note(name:b sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+					%pas normal il y a pas de b# normalement
+				[] b then note(name:c sharp:false octave:Note.octave+1 duration:Note.duration instrument:Note.instrument) end
 			else case Note.name
 				of c then note(name:c sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] d then note(name:d sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
@@ -114,7 +116,9 @@ local
 				[] d then note(name:d sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] f then note(name:f sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] g then note(name:g sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
-				[] a then note(name:a sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) end
+				[] a then note(name:a sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+					% pas normal il y a pas de b# normalement
+				[] b then note(name:b sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) end
 			else case Note.name
 				of c then note(name:b sharp:false octave:Note.octave-1 duration:Note.duration instrument:Note.instrument)
 				[] d then note(name:c sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
@@ -152,10 +156,10 @@ local
 		fun {ExtendItem I}
 			% Return: List of <extended sound>
 			case I 
-			of nil then nil
-			[] H|T then Res in 			% Item is a chord
+			of nil then [nil]			% Item is an empty chord (nil is and empty list thus an empty chords)
+			[] H|T then	 				% Item is a chord
 				case H#T 
-				of nil#nil then [nil] 	% Item is an empty chord
+				of nil#nil then [nil] 	% in case there is an chords containing an empty chords ([nil]) but it shouldn't happen
 				else 					% else : normal chord
 					%{Browse 'chord : '#[{List.map I ExtendNoteOrSilence}]}
 					[{List.map I ExtendNoteOrSilence}]
@@ -169,12 +173,11 @@ local
 				[{ExtendNoteOrSilence I}] 		% Item is a note/silence
 			end
 		end
-      Result Res
+      Result
 	in
       {List.map Partition ExtendItem Result}
-      Res = {List.foldR Result List.append nil}
-	  %{Browse 'Res P2T'#Res} 
-	  Res
+	  %{Browse 'Res P2T'#{List.foldR Result List.append nil}} 
+	  {List.foldR Result List.append nil}
    end
 	
 
@@ -199,7 +202,7 @@ local
 		end
 
 		case Note
-		of nil then Is = [nil] 		% si accord vide
+		of nil then Is = [nil] 		% si accord vide %%%% normalement ca n'arrivera plus car j'ai mis le cas dans SamplePartition
 		else 						% si note normal
 			Height = {IntToFloat {GetHeight Note}} % float
 			Freq = {Pow 2.0 (Height/12.0)} * 440.0
@@ -235,13 +238,26 @@ local
 		{Map {Go Chord Start} fun {$ X} X/{IntToFloat {Length Chord}} end}
 	end
 
+	/* 
+	* Take an extended partition, e.g. [note(duration:2 instrument:none name:a octave:0 sharp:false) ... nil ...]
+	* check if it is not empty, then check if each element is a chord or a note,
+	* and then turn each note into a sample and finally append all the sample together
+	*/
 	fun {SamplePartition ExtPart}
 		case ExtPart
 		of nil then nil
 		[] H|T then
+			%{Browse 'HeadSP'#H#'tailSP'#T}
 			case H
-			of _|_ then {Append {SampleFromChord H} {SamplePartition T}}
-			else {Append {SampleFromNote H} {SamplePartition T}}
+			of nil then 
+				%{Browse 'NilinSP'#H}
+				{Append nil {SamplePartition T}}				% if H is nil (empty chord) then it is deleted from the partition (empty chord duration = 0)
+			[] _|_ then 
+				%{Browse 'chordinSP'#H}
+				{Append {SampleFromChord H} {SamplePartition T}}
+			else
+				%{Browse 'noteinSP'#H} 
+				{Append {SampleFromNote H} {SamplePartition T}} 
 			end
 		end
 	end
@@ -389,7 +405,10 @@ local
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
-			of partition(P) 					then {SamplePartition {P2T P}}
+			of partition(P) 					then 
+													%{Browse 'Partition'#P}
+													%{Browse 'P2T_ds_Mix'#{P2T P}}
+													{SamplePartition {P2T P}}
 			[] samples(S) 						then S
 			[] wave(Filename) 					then {Project.readFile Filename}
 			[] merge(Ms) 						then {MergeMusics Ms P2T}
@@ -443,7 +462,9 @@ local
 	% Music = [fade(start:2.0 finish:3.0 [partition(Ms)])]
 
 	% Test empty chords
-	Music = [partition([a b [nil] ])]
+	Music = [partition([note(duration:2 instrument:none name:b octave:1 sharp:true)
+						nil
+						note(duration:2 instrument:none name:a octave:0 sharp:false) ] ) ]
 	
 	
 	% pour la soumision finale :
