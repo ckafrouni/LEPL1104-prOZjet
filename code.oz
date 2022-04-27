@@ -1,4 +1,5 @@
-/* *** PrOZjet 2022 - Oz Player - LINFO 1401 ***
+/* 
+PrOZjet 2022 - Oz Player - LINFO 1104
 Christophe KAFROUNI	– 5796 1800
 Tom KENDA 				– 3200 1700
 */
@@ -42,7 +43,7 @@ local
 	 * Return: <flat partition>
 	 */
    fun {DroneTransform X N}
-		{List.foldR 
+		{List.foldL 
 			{List.map {List.make N} fun {$ _} X end}
 			List.append nil}
    end
@@ -75,13 +76,13 @@ local
 	 * Return: <flat partition>
 	 */
    fun {DurationTransform Partition Duration}
-      fun {AccTime X Acc}
+      fun {AccTime Acc X}
          case X 
 			of nil then Acc
 		   [] Note|_ then Note.duration + Acc
          else X.duration + Acc end
       end
-      CurrentLength = {List.foldR Partition AccTime 0.0}
+      CurrentLength = {List.foldL Partition AccTime 0.0}
       Factor = Duration/CurrentLength   
    in {StretchTransform Partition Factor} end
 
@@ -164,19 +165,19 @@ local
 		fun {ExtendItem I}
 			% Return: List of <extended sound>
 			case I 
-			of nil then [nil]			% Item is an empty chord (nil is and empty list thus an empty chords)
-			[] _|_ then	[{List.map I ExtendNoteOrSilence}] 				% Item is a chord
-			[] drone(note:X amount:N) then {DroneTransform {ExtendItem X} N}
-			[] stretch(factor:F Is) then {StretchTransform {PartitionToTimedList Is} F}
-			[] duration(seconds:D Is) then {DurationTransform {PartitionToTimedList Is} D}
-			[] transpose(semitones:N Is) then {TransposeTransform {PartitionToTimedList Is} N}
-			else [{ExtendNoteOrSilence I}] 		% Item is a note/silence
+			of nil 									then [nil] % Item is an empty chord (nil is and empty list thus an empty chords)
+			[] _|_ 									then [{List.map I ExtendNoteOrSilence}] % Item is a chord
+			[] drone(note:X amount:N) 			then {DroneTransform {ExtendItem X} N}
+			[] stretch(factor:F Is) 			then {StretchTransform {PartitionToTimedList Is} F}
+			[] duration(seconds:D Is) 			then {DurationTransform {PartitionToTimedList Is} D}
+			[] transpose(semitones:N Is)		then {TransposeTransform {PartitionToTimedList Is} N}
+			else [{ExtendNoteOrSilence I}] % Item is a note/silence
 			end
 		end
       Result
 	in
 		{List.map Partition ExtendItem Result}
-		{List.foldR Result List.append nil}
+		{List.foldL Result List.append nil}
    end
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -377,9 +378,9 @@ local
 			end
 		end
 	in {Flatten {Map Music Go}} end
-	
+
 	% pour la soumision finale :
-	% Music = {Project.load 'example.dj.oz'}
+	Music = {Project.load 'example.dj.oz'}
    Start
 in
    Start = {Time}
