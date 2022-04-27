@@ -1,6 +1,6 @@
 /* *** PrOZjet 2022 - Oz Player - LINFO 1401 ***
-Christophe KAFROUNI – 
-Tom KENDA 			– 32001700
+Christophe KAFROUNI	– 5796 1800
+Tom KENDA 				– 3200 1700
 */
 
 local
@@ -56,7 +56,9 @@ local
 	 */
    fun {StretchTransform Partition Factor}
       fun {Mapper I} 
-         case I of _|_ then {List.map I Mapper}
+         case I 
+			of nil then nil
+		   [] _|_ then {List.map I Mapper}
          [] silence(duration:X) then silence(duration:X*Factor)
          [] note(duration:D instrument:I name:N octave:O sharp:S) then
             note(duration:D*Factor instrument:I name:N octave:O sharp:S)
@@ -74,8 +76,10 @@ local
 	 */
    fun {DurationTransform Partition Duration}
       fun {AccTime X Acc}
-         case X of Note|_ then Note.duration + Acc
-         [] _ then X.duration + Acc end
+         case X 
+			of nil then Acc
+		   [] Note|_ then Note.duration + Acc
+         else X.duration + Acc end
       end
       CurrentLength = {List.foldR Partition AccTime 0.0}
       Factor = Duration/CurrentLength   
@@ -131,11 +135,15 @@ local
 		end
 
 		fun {TransposeUp I}
-			case I of note(name:_ sharp:_ octave:_ duration:_ instrument:_) then {AddSemitone I}
+			case I 
+			of nil then nil
+			[] note(name:_ sharp:_ octave:_ duration:_ instrument:_) then {AddSemitone I}
 			[] _|_ then {List.map I AddSemitone} end
 		end
 		fun {TransposeDown I}
-			case I of note(name:_ sharp:_ octave:_ duration:_ instrument:_) then {RemoveSemitone I}
+			case I 
+			of nil then nil
+		   [] note(name:_ sharp:_ octave:_ duration:_ instrument:_) then {RemoveSemitone I}
 			[] _|_ then {List.map I RemoveSemitone} end
 		end
 	in
@@ -157,68 +165,45 @@ local
 			% Return: List of <extended sound>
 			case I 
 			of nil then [nil]			% Item is an empty chord (nil is and empty list thus an empty chords)
-			[] H|T then	 				% Item is a chord
-				case H#T 
-				of nil#nil then [nil] 	% in case there is an chords containing an empty chords ([nil]) but it shouldn't happen
-				else 					% else : normal chord
-					%{Browse 'chord : '#[{List.map I ExtendNoteOrSilence}]}
-					[{List.map I ExtendNoteOrSilence}]
-				end
+			[] _|_ then	[{List.map I ExtendNoteOrSilence}] 				% Item is a chord
 			[] drone(note:X amount:N) then {DroneTransform {ExtendItem X} N}
 			[] stretch(factor:F Is) then {StretchTransform {PartitionToTimedList Is} F}
 			[] duration(seconds:D Is) then {DurationTransform {PartitionToTimedList Is} D}
 			[] transpose(semitones:N Is) then {TransposeTransform {PartitionToTimedList Is} N}
-			else 
-				%{Browse 'Note : '#[{ExtendNoteOrSilence I}]}  
-				[{ExtendNoteOrSilence I}] 		% Item is a note/silence
+			else [{ExtendNoteOrSilence I}] 		% Item is a note/silence
 			end
 		end
       Result
 	in
-      {List.map Partition ExtendItem Result}
-	  %{Browse 'Res P2T'#{List.foldR Result List.append nil}} 
-	  {List.foldR Result List.append nil}
+		{List.map Partition ExtendItem Result}
+		{List.foldR Result List.append nil}
    end
-	
 
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	% MIX FUNCTIONS
    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	fun {SampleFromNote Note}
+
 		fun {GetHeight Note} 
 			% 12*(O-4)-Counter
 			% C3 C#3 D3 D#3 E3 F3 F#3 G3 G#3 A3 A#3 B3 C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 |A4| A#4 B4 C5 C#5 D5 D#5 E5 F5 F#5 G5 G#5 A5 A#5 B5
 			fun {HeightAcc Note Acc}
-				%{Browse 'heightacc:'#Note}
 				if Note.name == a andthen Note.sharp == false then 12*(Note.octave-4)-Acc
 				else {HeightAcc {TransposeTransform [Note] 1}.1 Acc+1} end
 			end
-		in 
-			case Note 
-			of silence(duration:_) then 0 
-			else {HeightAcc Note 0} 
-			end 
-		end
+		in case Note of silence(duration:_) then 0 else {HeightAcc Note 0} end end
 
-		case Note
-		of nil then Is = [nil] 		% si accord vide %%%% normalement ca n'arrivera plus car j'ai mis le cas dans SamplePartition
-		else 						% si note normal
-			Height = {IntToFloat {GetHeight Note}} % float
-			Freq = {Pow 2.0 (Height/12.0)} * 440.0
-			SampleSize = {StringToFloat Note.duration} * 44100.0
-			Is = {List.number 1 {FloatToInt SampleSize} 1}
-		end
 		fun {CalcAi I} X in			% fonction qui calcule Ai pour chaque pas de temps
-			case I of nil then 0.0 	% si accord vide %%%%%%%%%% j'ai pas trouvé d'autre manière de faire ... on peut pas juste skip et pas mettre de chiffre ..?
-			else					% si accord normal
 				X = 2.0 * 3.14159265359 * Freq * {IntToFloat I}
-				0.5 * {Sin X/SampleSize $} 
-			end
+				0.5 * {Sin X/44100.0} 
 		end
-	Is Height Freq SampleSize
-	in
-		% {Browse {Map Is CalcAi}}
+		Is Height Freq SampleSize in
+
+		Height = {IntToFloat {GetHeight Note}} % float
+		Freq = {Pow 2.0 (Height/12.0)} * 440.0
+		SampleSize = {StringToFloat Note.duration} * 44100.0
+		Is = {List.number 0 {FloatToInt SampleSize}-1 1}
 		{Map Is CalcAi}
 	end
 
@@ -228,15 +213,12 @@ local
 		fun {Go Chord Acc}
 			case Chord
 			of nil then Acc
-			[] Note|T then 
-				{Go T
-					{List.zip Acc {SampleFromNote Note} Sum $}}
+			[] Note|T then {Go T {List.zip Acc {SampleFromNote Note} Sum $}}
 			end
 		end
 		Start = {Map {List.make {FloatToInt SampleSize} $} fun {$ X} 0.0 end}
-	in
-		{Map {Go Chord Start} fun {$ X} X/{IntToFloat {Length Chord}} end}
-	end
+
+	in {Map {Go Chord Start} fun {$ X} X/{IntToFloat {Length Chord}} end} end
 
 	/* 
 	* Take an extended partition, e.g. [note(duration:2 instrument:none name:a octave:0 sharp:false) ... nil ...]
@@ -247,17 +229,10 @@ local
 		case ExtPart
 		of nil then nil
 		[] H|T then
-			%{Browse 'HeadSP'#H#'tailSP'#T}
 			case H
-			of nil then 
-				%{Browse 'NilinSP'#H}
-				{Append nil {SamplePartition T}}				% if H is nil (empty chord) then it is deleted from the partition (empty chord duration = 0)
-			[] _|_ then 
-				%{Browse 'chordinSP'#H}
-				{Append {SampleFromChord H} {SamplePartition T}}
-			else
-				%{Browse 'noteinSP'#H} 
-				{Append {SampleFromNote H} {SamplePartition T}} 
+			of nil then {Append nil {SamplePartition T}}				% if H is nil (empty chord) then it is deleted from the partition (empty chord duration = 0)
+			[] _|_ then {Append {SampleFromChord H} {SamplePartition T}}
+			else {Append {SampleFromNote H} {SamplePartition T}} 
 			end
 		end
 	end
@@ -309,8 +284,6 @@ local
 		{SumMs Final {MakeListOfN Max 0.0}}
 	end
 
-%%% Filter function --
-
 	fun {RepeatFilter N Music}
 		if N==0 then nil
 		else {Flatten Music|{RepeatFilter N-1 Music}} % {Flatten Music|Music|nil}
@@ -345,150 +318,72 @@ local
 		end
 	end
 
-	fun {ClipFilter LowS HighS Music}
-		LenLowS = {Length LowS}
-		LenHighS = {Length HighS}
-		LenMusic = {Length Music}
-		NewLowS NewHighS TmpMusic
-	in
-		if LenLowS > LenMusic then NewLowS = {List.take LowS LenMusic}
-		elseif LenLowS < LenMusic then NewLowS = {Append LowS {MakeListOfN (LenMusic-LenLowS) ~1.0}}
-		else NewLowS = LowS end
-
-		if LenHighS > LenMusic then NewHighS = {List.take HighS LenMusic}
-		elseif LenHighS < LenMusic then NewHighS = {Append HighS {MakeListOfN (LenMusic-LenHighS) 1.0}}
-		else NewHighS = HighS end
-
-		TmpMusic = {List.zip NewHighS Music fun {$ X Y} {Min X Y} end $}
-		{List.zip NewLowS TmpMusic fun {$ X Y} {Max X Y} end $}
+	fun {ClipFilter Low High Music}
+		{List.map Music fun {$ X} if X < Low then Low elseif X > High then High else X end end}
 	end
 
 	fun {EchoFilter Delay Decay Ms P2T}
 		Echo = {List.append {MakeListOfN {FloatToInt Delay*44100.0} 0.0} Ms}
-	in {MergeMusics [Decay#[samples(Echo)] 1.0-Decay#[samples(Ms)]] P2T} end
+		DecayedEcho = {List.map Echo fun {$ X} X*Decay end}
+		NewMs = {List.append Ms {MakeListOfN {FloatToInt Delay*44100.0} 0.0}}
+	in 
+		{List.zip DecayedEcho NewMs fun {$ X Y} X+Y end}
+	end
+	% in {MergeMusics [Decay#[samples(Echo)] 1.0#[samples(Ms)]] P2T} end
 
 	% Fade Filter
 	fun {FadeFilter Time_in Time_out Music}
 
-		fun {MultList L1 L2} {List.zip L1 L2 fun {$ Xi Yi} Xi*Yi end $}
-		end % multiply 2 lists element wize
+		fun {MultList L1 L2} {List.zip L1 L2 fun {$ Xi Yi} Xi*Yi end $} end % multiply 2 lists element wize
 
 		fun {GetFadeFilter SampleSize}
 			% Return a list to multiply the music with          ex. if samplesize = 5
-			Factor = 1.0/{IntToFloat SampleSize}                % --> 1/5
-			L = {MakeListOfN SampleSize 1.0}                    % --> [1 1 1 1 1] 
-		in
-			{Append [0.0] {List.mapInd L fun {$ I A} {IntToFloat I} * Factor end $}} % --> [0 0.2 0.4 0.8 1]
-		end
+			Factor = 1.0/({IntToFloat SampleSize})         % --> 1/5
+			L = {MakeListOfN SampleSize-1 1.0}                    % --> [1 1 1 1] 
+		in {Append [0.0] {List.mapInd L fun {$ I A} {IntToFloat I} * Factor end $}} end % --> [0 0.2 0.4 0.8]
 
 		Time_in_S = {FloatToInt Time_in * 44100.0}
 		Time_out_S = {FloatToInt Time_out * 44100.0}
-		Middle_len  = {Length Music} - (Time_out_S+1) - (Time_in_S+1)
+		Middle_len  = {Length Music} - (Time_out_S) - (Time_in_S)
 
-		Finish_time = {Length Music} - (Time_out_S+1)
+		Finish_time = {Length Music} - (Time_out_S)
 
-		StartSample  = {List.take Music (Time_in_S+1) }
+		StartSample  = {List.take Music (Time_in_S) }
 		FinalSample  = {List.drop Music Finish_time}   %Note pour économiser la mémoire on pourrait mettre le calcul de finish dedant direct
-		MiddleSample = {List.take {List.drop Music (Time_in_S+1)} Middle_len } % drop before the start and then take until the finish
+
+		MiddleSample = {List.take {List.drop Music (Time_in_S)} Middle_len } % drop before the start and then take until the finish
 
 		FadedStart = {MultList StartSample {GetFadeFilter Time_in_S }}
 		FadedFinal = {MultList FinalSample {Reverse {GetFadeFilter Time_out_S }}}	
-	in
-		{Append {Append FadedStart MiddleSample} FadedFinal }
-	end
+	in {Append {Append FadedStart MiddleSample} FadedFinal } end
+
 
 	%----------------------------------------------------------------------------%
-	% TODO
-   % <music> ::= nil | <part> '|' <music>
-	% <filter> ::= 
-	% 		fade(start:<duration> out:<duration> <music>)
    fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
-			of partition(P) 					then 
-													%{Browse 'Partition'#P}
-													%{Browse 'P2T_ds_Mix'#{P2T P}}
-													{SamplePartition {P2T P}}
-			[] samples(S) 						then S
-			[] wave(Filename) 					then {Project.readFile Filename}
-			[] merge(Ms) 						then {MergeMusics Ms P2T}
-			[] reverse(Ms) 						then {List.reverse {Mix P2T Ms}}
-			[] repeat(amount:N Ms) 				then {RepeatFilter N {Mix P2T Ms}}
-			[] loop(seconds:S Ms) 				then {LoopFilter S {Mix P2T Ms}}
-			[] cut(start:S finish:F Ms) 		then {CutFilter S F {Mix P2T Ms}}
-			[] clip(low:LowS high:HighS Ms) 	then {ClipFilter LowS HighS {Mix P2T Ms}}
-			[] echo(delay:D decay:F Ms)			then {EchoFilter D F {Mix P2T Ms} P2T} 
-			[] fade(start:Time_in finish:Time_out Ms) then {FadeFilter Time_in Time_out {Mix P2T Ms}}
+			of partition(P) 								then {SamplePartition {P2T P}}
+			[] samples(S) 									then S
+			[] wave(Filename) 							then {Project.readFile Filename}
+			[] merge(Ms) 									then {MergeMusics Ms P2T}
+			[] reverse(Ms) 								then {List.reverse {Mix P2T Ms}}
+			[] repeat(amount:N Ms) 						then {RepeatFilter N {Mix P2T Ms}}
+			[] loop(seconds:S Ms) 						then {LoopFilter S {Mix P2T Ms}}
+			[] cut(start:S finish:F Ms) 				then {CutFilter S F {Mix P2T Ms}}
+			[] clip(low:LowS high:HighS Ms) 			then {ClipFilter LowS HighS {Mix P2T Ms}}
+			[] echo(delay:D decay:F Ms)				then {EchoFilter D F {Mix P2T Ms} P2T} 
+         [] fade(start:Time_in out:Time_out Ms) then {FadeFilter Time_in Time_out {Mix P2T Ms}}
 			[] _ then nil
 			end
 		end
-	in
-		%{Browse 'Res Mix'#{Flatten {Map Music Go}}} 
-		{Flatten {Map Music Go}}
-   end
-
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-   % TESTS
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-   
-	%Music1 = [partition([a b]) partition([c d])]
-	% Music=[echo(delay:1.5 decay:0.4 [partition([
-	% 	stretch(factor:0.5 [[c e g] [d f a] [e g b]]) a b c
-	% ])])]
-	%Music2 = [wave('wave/animals/cat.wav')]
-
-	%Music = [merge([0.5#[samples([0.2 0.2 0.2])] 0.5#[samples([0.6 0.6 ])]])]
-	%Music = [merge([0.5#Music1 0.5#Music2])]
-	%Music = [repeat(amount:3 [partition([c d e f])])]
-
-	% Music = [loop(seconds:3.5 [partition([c g])])]
-
-	%% test clip
-	% LoS = [~0.5 ~0.5 ~0.5 ~0.5 ~0.5]
-	% HiS = [0.5 0.5 0.5 0.5 0.5 0.5]
-	% Ms = [0.1 0.6 ~0.6 ~0.1 0.0 0.0]
-	% Music = [clip(low:LoS high:HiS [samples(Ms)])]
-
-    %% test cut
-	% Ms = [1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0]
-	% Music = [cut(start:2.0/44100.0 finish:13.0/44100.0 [samples(Ms)])]
-
-	% Music=[echo(delay:3.0/44100.0 decay:0.5 [samples([0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9])] )]
-    
-	%% test fade
-	% Ms = [1.0 1.0 1.0 1.0 1.0 1.0 0.2 0.2 0.2 0.2 1.0 1.0 1.0 1.0 1.0 1.0]
-	% Ms = [a a a a a a a]
-	% Music = [fade(start:2.0 finish:3.0 [partition(Ms)])]
-
-	% Test empty chords
-	Music = [partition([note(duration:2 instrument:none name:b octave:1 sharp:true)
-						nil
-						note(duration:2 instrument:none name:a octave:0 sharp:false) ] ) ]
-	
+	in {Flatten {Map Music Go}} end
 	
 	% pour la soumision finale :
 	% Music = {Project.load 'example.dj.oz'}
-
    Start
-
-   % Uncomment next line to insert your tests.
-   %\insert 'tests.oz'
-   % !!! Remove this before submitting.
 in
    Start = {Time}
-
-   % Uncomment next line to run your tests.
-   %{Test Mix PartitionToTimedList}
-
-   % Add variables to this list to avoid "local variable used only once"
-   % warnings.
    {ForAll [ExtendNoteOrSilence Music] Wait}
-   
-   % Calls your code, prints the result and outputs the result to `out.wav`.
-   % You don't need to modify this.
    {Browse {Project.run Mix PartitionToTimedList Music 'out.wav'}}
-   
-   % Shows the total time to run your code.
    {Browse {IntToFloat {Time}-Start} / 1000.0}
 end
