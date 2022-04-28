@@ -21,12 +21,13 @@
 
 
 local
-	Ac1 = [c3 e3 g3]
+	N1 = note(name:f sharp:true octave:4 duration:1.5 instrument:none)
+	Ac1 = [c5 d5 e5]
 	Ac2 = [c4 e4 g4]
 	Ac3 = [c5 e5 g5]
 	B1 = duration(seconds:3.0 [drone(amount:5 note:Ac1) drone(amount:3 note:Ac2) drone(amount:2 note:Ac3)])
 
-	Partition = [B1]
+	Partition = [N1 B1 silence c]
 	% Partition = {Flatten [B1]}
 	% Partition = [a b c d e]
 in

@@ -1,39 +1,72 @@
-/* 
-PrOZjet 2022 - Oz Player - LINFO 1104
-Christophe KAFROUNI	– 5796 1800
-Tom KENDA 				– 3200 1700
-*/
+/****************************************
+ * PrOZjet 2022 - Oz Player - LINFO1104 *
+ * ------------------------------------ *
+ * KAFROUNI christophe ------- 57961800 *
+ * KENDA Tom ----------------- 32001700 *
+ ****************************************/
+
 
 local
-   % See project statement for API details.
-   [Project] = {Link ['Project2022.ozf']}
-   Time = {Link ['x-oz://boot/Time']}.1.getReferenceTime
+	[Project] = {Link ['Project2022.ozf']}
+	Time = {Link ['x-oz://boot/Time']}.1.getReferenceTime
 
-	
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	% PartitionToTimedList FUNCTION
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	/**
-	 * Function converts a note to its extended form. 
+	 * Converts a <partition> to a <flat partition>. Meaning the result is only
+	 * composed of <extended sounds>. ie: <extended notes>|<extended chords>
+	 * Params: Partition: <partition>
+	 * Return: <flat partition>
+	 */
+	 fun {PartitionToTimedList Partition}
+		fun {ExtendItem I}
+			% Return: List of <extended sound>
+			case I 
+			of _|_ 									then [{List.map I ExtendNoteOrSilence}] % Item is a chord
+			[] drone(note:X amount:N) 			then {DroneTransform {ExtendItem X} N}
+			[] stretch(factor:F Is) 			then {StretchTransform {PartitionToTimedList Is} F}
+			[] duration(seconds:D Is) 			then {DurationTransform {PartitionToTimedList Is} D}
+			[] transpose(semitones:N Is)		then {TransposeTransform {PartitionToTimedList Is} N}
+			else [{ExtendNoteOrSilence I}] end % Item is a note/silence/nil
+		end
+		fun {AccItems Acc X} {List.append Acc {ExtendItem X}} end
+	in {List.foldL Partition AccItems nil} end
+
+	/********** Utilities *********/
+	/**
+	 * Checks if X is already in an extended format.
+	 * Returns: true|false
+	 */
+	fun {IsExtended X}
+		case X
+		of note(duration:_ instrument:_ name:_ octave:_ sharp:_) then true
+		[] silence(duration:_) then true
+		[] nil then true % Format for an empty chord
+		else false end 
+	end
+
+	/**
+	 * Converts a note to its extended form.
 	 * Params: Note: <note>|<extended note>
 	 * Return: <extended note>
 	 */
-   fun {ExtendNoteOrSilence Note}
-      case Note
-      of note(duration:_ instrument:_ name:_ octave:_ sharp:_) then Note
-      [] silence(duration:_) then Note
-      [] silence then silence(duration:1.0)
-      [] Name#Octave then note(name:Name octave:Octave sharp:true duration:1.0 instrument:none)
-      [] Atom then
-		case {AtomToString Atom}
-        of [_] then note(name:Atom octave:4 sharp:false duration:1.0 instrument:none)
-        [] [N O] then note(name:{StringToAtom [N]} octave:{StringToInt [O]} sharp:false duration:1.0 instrument: none)
-        else nil % si un a un accord vide [nil] ca rentre ici car nil est une atom
+	 fun {ExtendNoteOrSilence Note}
+		if {IsExtended Note} then Note
+		else case Note
+			of silence then silence(duration:1.0)
+			[] Name#Octave then note(name:Name octave:Octave sharp:true duration:1.0 instrument:none)
+			else case {AtomToString Note}
+				of [_] then note(name:Note octave:4 sharp:false duration:1.0 instrument:none)
+				[] [N O] then note(name:{StringToAtom [N]} octave:{StringToInt [O]} sharp:false duration:1.0 instrument: none)
+				else raise {VirtualString.toAtom 'Could not convert: '#Note} end end
+			end
 		end
-	  else nil
-      end
-   end
+	end
+
+
+	/****** Transformations *******/
 
 	/**
 	 * Repeats a drone or a chord multiple times.
@@ -42,11 +75,10 @@ local
 	 *		N: integer
 	 * Return: <flat partition>
 	 */
-   fun {DroneTransform X N}
-		{List.foldL 
-			{List.map {List.make N} fun {$ _} X end}
-			List.append nil}
-   end
+	fun {DroneTransform X N}
+		fun {AccItem Acc _} {List.append X Acc} end
+	in {List.foldL {List.make N} AccItem nil} end
+
 
 	/**
 	 * Stretch every item in the partition by a factor.
@@ -55,18 +87,17 @@ local
 	 *		Factor: float
 	 * Return: <flat partition>
 	 */
-   fun {StretchTransform Partition Factor}
-      fun {Mapper I} 
-         case I 
+	 fun {StretchTransform Partition Factor}
+		fun {MapItem I} 
+			case I 
 			of nil then nil
-		   [] _|_ then {List.map I Mapper}
-         [] silence(duration:X) then silence(duration:X*Factor)
-         [] note(duration:D instrument:I name:N octave:O sharp:S) then
-            note(duration:D*Factor instrument:I name:N octave:O sharp:S)
-         end
-      end 
-   in {List.map Partition Mapper} end
-	
+			[] _|_ then {List.map I MapItem}
+			[] silence(duration:X) then silence(duration:X*Factor)
+			[] note(duration:D instrument:I name:N octave:O sharp:S) then note(duration:D*Factor instrument:I name:N octave:O sharp:S)
+			end
+		end 
+	in {List.map Partition MapItem} end
+
 	/**
 	 * Set partition's total length to Duration. 
 	 *	Every item is stretched accordingly.
@@ -75,16 +106,15 @@ local
 	 *		Duration: float
 	 * Return: <flat partition>
 	 */
-   fun {DurationTransform Partition Duration}
-      fun {AccTime Acc X}
-         case X 
+	 fun {DurationTransform Partition Duration}
+		fun {AccTime Acc X}
+			case X 
 			of nil then Acc
-		   [] Note|_ then Note.duration + Acc
-         else X.duration + Acc end
-      end
-      CurrentLength = {List.foldL Partition AccTime 0.0}
-      Factor = Duration/CurrentLength   
-   in {StretchTransform Partition Factor} end
+			[] Note|_ then Note.duration + Acc
+			else X.duration + Acc end
+		end
+		Factor = Duration/{List.foldL Partition AccTime 0.0}   
+	in {StretchTransform Partition Factor} end
 
 	/**
 	 * Adds N semitones to every item in the Partition,
@@ -94,36 +124,32 @@ local
 	 *		N: integer
 	 * Return: <flat partition>
 	 */
-	fun {TransposeTransform Partition N}	
+	 fun {TransposeTransform Partition N}	
 		% C C# D D# E F F# G G# A A# B
 		fun {AddSemitone Note}
 			if Note.sharp == true then case Note.name
 				of c then note(name:d sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] d then note(name:e sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] e then note(name:f sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] f then note(name:g sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] g then note(name:a sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] a then note(name:b sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
-					%pas normal il y a pas de b# normalement
-				[] b then note(name:c sharp:false octave:Note.octave+1 duration:Note.duration instrument:Note.instrument) end
+				[] b then note(name:c sharp:true octave:Note.octave+1 duration:Note.duration instrument:Note.instrument)
+				else raise {VirtualString.toAtom 'Could not add semitone to: '#Note} end end
 			else case Note.name
 				of c then note(name:c sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] d then note(name:d sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
+				[] e then note(name:f sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) 
 				[] f then note(name:f sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] g then note(name:g sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
 				[] a then note(name:a sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
-				[] e then note(name:f sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) 
-				[] b then note(name:c sharp:false octave:Note.octave+1 duration:Note.duration instrument:Note.instrument) end
+				[] b then note(name:c sharp:false octave:Note.octave+1 duration:Note.duration instrument:Note.instrument)
+				else raise {VirtualString.toAtom 'Could not add semitone to: '#Note} end end
 			end
 		end
 		fun {RemoveSemitone Note}
-			if Note.sharp == true then case Note.name
-				of c then note(name:c sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
-				[] d then note(name:d sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
-				[] f then note(name:f sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
-				[] g then note(name:g sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
-				[] a then note(name:a sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
-					% pas normal il y a pas de b# normalement
-				[] b then note(name:b sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument) end
+			% C C# D D# E F F# G G# A A# B
+			if Note.sharp == true then note(name:Note.name sharp:false octave:Note.octave duration:Note.duration instrument:Note.instrument)
 			else case Note.name
 				of c then note(name:b sharp:false octave:Note.octave-1 duration:Note.duration instrument:Note.instrument)
 				[] d then note(name:c sharp:true octave:Note.octave duration:Note.duration instrument:Note.instrument)
@@ -144,7 +170,7 @@ local
 		fun {TransposeDown I}
 			case I 
 			of nil then nil
-		   [] note(name:_ sharp:_ octave:_ duration:_ instrument:_) then {RemoveSemitone I}
+			[] note(name:_ sharp:_ octave:_ duration:_ instrument:_) then {RemoveSemitone I}
 			[] _|_ then {List.map I RemoveSemitone} end
 		end
 	in
@@ -154,40 +180,13 @@ local
 		end
 	end
 
-   %----------------------------------------------------------------------------%
-	/**
-	 * Converts a <partition> to a <flat partition>. Meaning the result is only
-	 * composed of <extended sounds>. ie: <extended notes>|<extended chords>
-	 * Params: Partition: <partition>
-	 * Return: <flat partition>
-	 */
-   fun {PartitionToTimedList Partition}
-		fun {ExtendItem I}
-			% Return: List of <extended sound>
-			case I 
-			of nil 									then [nil] % Item is an empty chord (nil is and empty list thus an empty chords)
-			[] _|_ 									then [{List.map I ExtendNoteOrSilence}] % Item is a chord
-			[] drone(note:X amount:N) 			then {DroneTransform {ExtendItem X} N}
-			[] stretch(factor:F Is) 			then {StretchTransform {PartitionToTimedList Is} F}
-			[] duration(seconds:D Is) 			then {DurationTransform {PartitionToTimedList Is} D}
-			[] transpose(semitones:N Is)		then {TransposeTransform {PartitionToTimedList Is} N}
-			else [{ExtendNoteOrSilence I}] % Item is a note/silence
-			end
-		end
-      Result
-	in
-		{List.map Partition ExtendItem Result}
-		{List.foldL Result List.append nil}
-   end
-
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	% MIX FUNCTIONS
-   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	% Mix FUNCTION
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 	fun {SampleFromNote Note}
 
 		fun {GetHeight Note} 
-			% 12*(O-4)-Counter
 			% C3 C#3 D3 D#3 E3 F3 F#3 G3 G#3 A3 A#3 B3 C4 C#4 D4 D#4 E4 F4 F#4 G4 G#4 |A4| A#4 B4 C5 C#5 D5 D#5 E5 F5 F#5 G5 G#5 A5 A#5 B5
 			fun {HeightAcc Note Acc}
 				if Note.name == a andthen Note.sharp == false then 12*(Note.octave-4)-Acc
@@ -197,15 +196,19 @@ local
 
 		fun {CalcAi I} X in			% fonction qui calcule Ai pour chaque pas de temps
 				X = 2.0 * 3.14159265359 * Freq * {IntToFloat I}
-				0.5 * {Sin X/44100.0} 
+				0.5 * {Sin X/44100.0}
 		end
-		Is Height Freq SampleSize in
-
-		Height = {IntToFloat {GetHeight Note}} % float
-		Freq = {Pow 2.0 (Height/12.0)} * 440.0
-		SampleSize = {StringToFloat Note.duration} * 44100.0
+		Height Freq 
+		SampleSize = Note.duration * 44100.0
 		Is = {List.number 0 {FloatToInt SampleSize}-1 1}
-		{Map Is CalcAi}
+	in
+		case Note 
+		of silence(duration:_) then {List.map Is fun {$ _} 0.0 end}
+		else
+			Height = {IntToFloat {GetHeight Note}} % float
+			Freq = {Pow 2.0 (Height/12.0)} * 440.0
+			{List.map Is CalcAi}
+		end
 	end
 
 	fun {SampleFromChord Chord}
@@ -330,7 +333,6 @@ local
 	in 
 		{List.zip DecayedEcho NewMs fun {$ X Y} X+Y end}
 	end
-	% in {MergeMusics [Decay#[samples(Echo)] 1.0#[samples(Ms)]] P2T} end
 
 	% Fade Filter
 	fun {FadeFilter Time_in Time_out Music}
@@ -360,7 +362,7 @@ local
 
 
 	%----------------------------------------------------------------------------%
-   fun {Mix P2T Music}
+	fun {Mix P2T Music}
 		fun {Go Part}
 			case Part
 			of partition(P) 								then {SamplePartition {P2T P}}
@@ -373,7 +375,7 @@ local
 			[] cut(start:S finish:F Ms) 				then {CutFilter S F {Mix P2T Ms}}
 			[] clip(low:LowS high:HighS Ms) 			then {ClipFilter LowS HighS {Mix P2T Ms}}
 			[] echo(delay:D decay:F Ms)				then {EchoFilter D F {Mix P2T Ms} P2T} 
-         [] fade(start:Time_in out:Time_out Ms) then {FadeFilter Time_in Time_out {Mix P2T Ms}}
+			[] fade(start:Time_in out:Time_out Ms) then {FadeFilter Time_in Time_out {Mix P2T Ms}}
 			[] _ then nil
 			end
 		end
@@ -381,10 +383,10 @@ local
 
 	% pour la soumision finale :
 	Music = {Project.load 'example.dj.oz'}
-   Start
+	Start
 in
-   Start = {Time}
-   {ForAll [ExtendNoteOrSilence Music] Wait}
-   {Browse {Project.run Mix PartitionToTimedList Music 'out.wav'}}
-   {Browse {IntToFloat {Time}-Start} / 1000.0}
+	Start = {Time}
+	{ForAll [ExtendNoteOrSilence Music] Wait}
+	{Browse {Project.run Mix PartitionToTimedList Music 'out.wav'}}
+	{Browse {IntToFloat {Time}-Start} / 1000.0}
 end
