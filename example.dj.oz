@@ -27,7 +27,7 @@ local
 	Ac3 = [c5 e5 g5]
 	B1 = duration(seconds:3.0 [drone(amount:5 note:Ac1) drone(amount:3 note:Ac2) drone(amount:2 note:Ac3)])
 
-	Partition = [N1 B1 silence c]
+	Partition = [N1 nil B1 silence c]
 	% Partition = {Flatten [B1]}
 	% Partition = [a b c d e]
 in
