@@ -286,7 +286,7 @@ local
 	fun {MergeMusics MusicsWithInts P2T}
 		fun {Scale Mus}
 			case Mus
-			of F#M then {List.map {Mix P2T M} fun {$ X} F*X end}
+			of F#M then Mixed={Mix P2T M} in {List.map Mixed fun {$ X} F*X end}
 			else nil end
 		end
 
@@ -418,10 +418,11 @@ local
 
 	% pour la soumision finale :
 	Music = {Project.load 'example.dj.oz'}
+	Output = 'out.wav'
 	Start
 in
 	Start = {Time}
 	{ForAll [ExtendNoteOrSilence Music] Wait}
-	{Browse {Project.run Mix PartitionToTimedList Music 'out.wav'}}
+	{Browse {Project.run Mix PartitionToTimedList Music Output}}
 	{Browse {Int.toFloat {Time}-Start} / 1000.0}
 end
