@@ -215,8 +215,7 @@ local
 			[] clip(low:LowS high:HighS Ms) 			then {ClipFilter LowS HighS {Mix P2T Ms}}
 			[] echo(delay:D decay:F Ms)				then {EchoFilter D F {Mix P2T Ms} P2T} 
 			[] fade(start:Time_in out:Time_out Ms) then {FadeFilter Time_in Time_out {Mix P2T Ms}}
-			[] _ then nil
-			end
+			else raise {VirtualString.toAtom 'Invalid part: '#Part} end end
 		end
 	in {List.flatten {List.map Music Go}} end
 
@@ -396,30 +395,23 @@ local
 	 * Params: Music: <music>, Time_in: float, Time_out: float
 	 * Return: <samples>
 	 */
-	fun {FadeFilter Time_in Time_out Music}
+	fun {FadeFilter FStart FOut Music}
+		Tmp MiddleSection
+		fun {DoFade Ms}
+			F = 1.0/{Int.toFloat {List.length Ms}}
+		in {List.mapInd Ms fun {$ I X} {Int.toFloat I-1}*F*X end} end
 
-		fun {MultList L1 L2} {List.zip L1 L2 fun {$ Xi Yi} Xi*Yi end $} end % multiply 2 lists element wize
+		StartSize 	= {Float.toInt FStart*44100.0}
+		OutSize 		= {Float.toInt FOut*44100.0}
+		MiddleSize 	= {List.length Music} - (StartSize+OutSize)
 
-		fun {GetFadeFilter SampleSize}
-			% Return a list to multiply the music with          ex. if samplesize = 5
-			Factor = 1.0/({Int.toFloat SampleSize})         % --> 1/5
-			L = {MakeListOfN SampleSize-1 1.0}                    % --> [1 1 1 1] 
-		in {List.append [0.0] {List.mapInd L fun {$ I A} {Int.toFloat I} * Factor end $}} end % --> [0 0.2 0.4 0.8]
+		StartSection 	= {List.takeDrop Music StartSize $ Tmp}
+		OutSection 		= {List.takeDrop Tmp MiddleSize MiddleSection $}
 
-		Time_in_S = {Float.toInt Time_in * 44100.0}
-		Time_out_S = {Float.toInt Time_out * 44100.0}
-		Middle_len  = {List.length Music} - (Time_out_S) - (Time_in_S)
+		FadedStart 	= {DoFade StartSection}
+		FadedOut 	= {List.reverse {DoFade {List.reverse OutSection}}}
 
-		Finish_time = {List.length Music} - (Time_out_S)
-
-		StartSample  = {List.take Music (Time_in_S) }
-		FinalSample  = {List.drop Music Finish_time}   %Note pour économiser la mémoire on pourrait mettre le calcul de finish dedant direct
-
-		MiddleSample = {List.take {List.drop Music (Time_in_S)} Middle_len } % drop before the start and then take until the finish
-
-		FadedStart = {MultList StartSample {GetFadeFilter Time_in_S }}
-		FadedFinal = {MultList FinalSample {List.reverse {GetFadeFilter Time_out_S }}}	
-	in {List.append {List.append FadedStart MiddleSample} FadedFinal } end
+	in {List.append {List.append FadedStart MiddleSection} FadedOut} end
 
 
 	%----------------------------------------------------------------------------%

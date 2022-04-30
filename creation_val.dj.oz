@@ -78,8 +78,8 @@
     
         Music3 = [clip(low:~1.0 high:1.0 Music2)]
     
-        Music = [lissage(Music3)]
+        % Music = [lissage(Music3)]
     
     in 
-        Music
+        Music3
     end
